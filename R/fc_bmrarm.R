@@ -272,8 +272,6 @@ bmrarm_fc_patient <- function(y, z, X, cur_draws, samp_info, prior_list) {
 #' @param sigma residual covariance matrix
 #' @param prior_alpha prior term for shape
 #' @param prior_alpha prior term for scale
-#' @return scalar
-#' @importFrom matrixcalc is.positive.definite
 #' @importFrom LaplacesDemon rinvwishart dinvwishart rmatrixnorm
 #' @export
 
@@ -336,7 +334,6 @@ bmrarm_fc_sig_beta <- function(y, X, Z_kron, cur_draws, samp_info) {
 #' @param prior_alpha prior term for shape
 #' @param prior_alpha prior term for scale
 #' @return scalar
-#' @importFrom matrixcalc is.positive.definite
 #' @export
 
 bmrarm_mh_ar <- function(y, X, Z_kron, cur_draws, samp_info) {
@@ -347,20 +344,14 @@ bmrarm_mh_ar <- function(y, X, Z_kron, cur_draws, samp_info) {
 
   ## Propose new values
   cur_draws2 <- cur_draws
-  #cur_draws2$ar <- exp(rnorm(1, log(cur_draws$ar), sd = samp_info$sd_ar))
   cur_draws2$ar <- rnorm(1, cur_draws$ar, sd = samp_info$sd_ar)
   if(abs(cur_draws2$ar) >=1 ) return(list(ar = cur_draws$ar, accept = 0))
-  #if(cur_draws2$ar <= 0) return(list(ar = cur_draws$ar, accept = 0))
 
   ## Calculate comparison values
   sig_list_old <- get_sig_list(cur_draws, samp_info)
   comp_old <- dmatrix_normal_log(resid_mat, cur_draws, samp_info, sig_list_old)
-  #dgamma(cur_draws$ar, 0.01, 0.01, log = T)
-  #dnorm(cur_draws$ar, 0, 10, log = T)
   sig_list_new <- get_sig_list(cur_draws2, samp_info)
   comp_new <- dmatrix_normal_log(resid_mat, cur_draws2, samp_info, sig_list_new)
-  #dgamma(cur_draws2$ar, 0.01, 0.01, log = T)
-  #dnorm(cur_draws2$ar, 0, 10, log = T)
 
   ## Get comparison value
   compar_val <- comp_new - comp_old
@@ -381,7 +372,6 @@ bmrarm_mh_ar <- function(y, X, Z_kron, cur_draws, samp_info) {
 #' @param prior_alpha prior term for scale
 #' @return scalar
 #' @importFrom MASS mvrnorm
-#' @importFrom hash hash
 #' @export
 
 dmatrix_normal_log <- function(resid_mat, cur_draws, samp_info, sig_list) {

@@ -13,9 +13,6 @@ bmrarm_fc_sig_beta(y, X, Z_kron, cur_draws, samp_info)
 
 \item{prior_alpha}{prior term for scale}
 }
-\value{
-scalar
-}
 \description{
 Full conditional draws of the regression coefficients
 }
