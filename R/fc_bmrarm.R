@@ -274,8 +274,7 @@ bmrarm_fc_patient <- function(y, z, X, cur_draws, samp_info, prior_list) {
 #' @param prior_alpha prior term for scale
 #' @return scalar
 #' @importFrom matrixcalc is.positive.definite
-#' @importFrom LaplacesDemon rinvwishart dinvwishart
-#' @importFrom MBSP matrix.normal
+#' @importFrom LaplacesDemon rinvwishart dinvwishart rmatrixnorm
 #' @export
 
 bmrarm_fc_sig_beta <- function(y, X, Z_kron, cur_draws, samp_info) {
@@ -326,7 +325,7 @@ bmrarm_fc_sig_beta <- function(y, X, Z_kron, cur_draws, samp_info) {
 
   ## Draw updates
   sig <- rinvwishart(samp_info$N_obs + N_outcomes, val)
-  beta <- matrix.normal(M = beta_hat, V = sig, U = x_inv)
+  beta <- rmatrixnorm(M = beta_hat, V = sig, U = x_inv)
   list(beta = beta, sig = sig)
 }
 
