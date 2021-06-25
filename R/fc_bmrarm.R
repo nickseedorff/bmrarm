@@ -247,7 +247,7 @@ bmrarm_fc_patient <- function(y, z, X, cur_draws, samp_info, prior_list, sep_sig
   }
 
   ## Covariance matrix for random effects
-  if(length(prior_list) == 2 & sep_sig) {
+  if(length(prior_list) == 3 & sep_sig) {
     pat_sig_int <- rinvwishart(N_pat + samp_info$N_outcomes,
                                crossprod(res[, c(1, 3)]) +
                                  prior_list$prior_int)
