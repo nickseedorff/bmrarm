@@ -16,7 +16,8 @@ get_dev_ar4(
   cuts,
   pat_eff,
   miss_mat,
-  samp_info
+  samp_info,
+  marginal
 )
 }
 \arguments{

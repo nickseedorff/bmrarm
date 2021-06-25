@@ -163,7 +163,7 @@ get_dev <- function(y, X, z, Z_kron, pat_idx, pat_idx_long, beta, sigma, cuts,
 #' @param ord_loc number of ordinal outcomes
 #' @return scalar
 
-get_DIC_ar <- function(samps) {
+get_DIC_ar <- function(samps, marginal = FALSE) {
 
   N_outcomes <- samps$samp_info$N_outcomes
   z <- samps$z
@@ -181,8 +181,15 @@ get_DIC_ar <- function(samps) {
     y_use <- samps$res_y[,, x]
     cuts_tmp <- samps$res_cuts[, x]
     ar_tmp <- samps$res_ar[x]
-    cur_draws <- list(ar = ar_tmp, sigma = sig_tmp)
-    sig_list <- get_sig_list(cur_draws, samps$samp_info)
+    if(!marginal) {
+      cur_draws <- list(ar = ar_tmp, sigma = sig_tmp)
+      sig_list <- get_sig_list(cur_draws, samps$samp_info)
+    } else {
+      pat_sig <- matrix(samps$res_pat_sig[, x], ncol = ncol(pat_eff))
+      cur_draws <- list(ar = ar_tmp, sigma = sig_tmp, pat_sig = pat_sig)
+      sig_list <- get_sig_list2(cur_draws, samps$samp_info)
+      pat_eff[] <- 0
+    }
 
     for(j in 1:length(sig_list$marg_cov_list)) {
       sig_list$marg_cov_inv_list[[j]] <- chol2inv(chol(sig_list$marg_cov_list[[j]]))
@@ -191,7 +198,7 @@ get_DIC_ar <- function(samps) {
     dev_vals <- get_dev_ar(
       y = y_use, X, z, Z_kron, pat_idx, pat_idx_long,
       beta = beta_tmp, sig_list, cuts = cuts_tmp, pat_eff = pat_eff,
-      miss_mat = miss_mat, samps$samp_info)
+      miss_mat = miss_mat, samps$samp_info, marginal)
   }) %>%
     unlist() %>%
     mean()
@@ -204,7 +211,15 @@ get_DIC_ar <- function(samps) {
   cuts_tmp <- rowMeans(samps$res_cuts)
   ar_tmp <- mean(samps$res_ar)
   cur_draws <- list(ar = ar_tmp, sigma = sig_tmp)
-  sig_list <- get_sig_list(cur_draws, samps$samp_info)
+  if(!marginal) {
+    cur_draws <- list(ar = ar_tmp, sigma = sig_tmp)
+    sig_list <- get_sig_list(cur_draws, samps$samp_info)
+  } else {
+    pat_sig <- matrix(rowMeans(samps$res_pat_sig), ncol = ncol(pat_eff))
+    cur_draws <- list(ar = ar_tmp, sigma = sig_tmp, pat_sig = pat_sig)
+    sig_list <- get_sig_list2(cur_draws, samps$samp_info)
+    pat_eff[] <- 0
+  }
 
   for(j in 1:length(sig_list$marg_cov_list)) {
     sig_list$marg_cov_inv_list[[j]] <- chol2inv(chol(sig_list$marg_cov_list[[j]]))
@@ -212,7 +227,7 @@ get_DIC_ar <- function(samps) {
 
   dev_of_means <- get_dev_ar(
     y = y_use, X, z, Z_kron, pat_idx, pat_idx_long, beta = beta_tmp,
-    sig_list, cuts = cuts_tmp, pat_eff, miss_mat, samps$samp_info)
+    sig_list, cuts = cuts_tmp, pat_eff, miss_mat, samps$samp_info, marginal)
 
   ## Output DIC, D, pD
   pd <- mean_dev - dev_of_means
@@ -229,7 +244,7 @@ get_DIC_ar <- function(samps) {
 #' @return scalar
 
 get_dev_ar <- function(y, X, z, Z_kron, pat_idx, pat_idx_long, beta, sig_list,
-                       cuts, pat_eff, miss_mat, samp_info) {
+                       cuts, pat_eff, miss_mat, samp_info, marginal) {
 
   mean_vec <- as.numeric(X %*% beta) + rowSums(Z_kron * pat_eff[pat_idx_long, ])
   mean_mat <- matrix(mean_vec, ncol = ncol(y))
@@ -249,8 +264,10 @@ get_dev_ar <- function(y, X, z, Z_kron, pat_idx, pat_idx_long, beta, sig_list,
     locs <- samp_info$pat_locs[[i]]
     miss_locs <- samp_info$pat_cont_miss_rank[[i]]
 
+
     ## Conditional mean
     ind <- samp_info$pat_time_ind[i]
+    #if(marginal) ind <- i
     tmp_mean <- as.numeric(
       mean_mat[locs, 1] + sig_list$mean_pre_list[[ind]] %*%
         (as.numeric(y_mat[locs, -1]) - as.numeric(mean_mat[locs, -1])))
@@ -410,7 +427,7 @@ get_dev_ar3 <- function(y, X, z, Z_kron, pat_idx, pat_idx_long, beta, sig_list,
 #' @return scalar
 
 get_dev_ar4 <- function(y, X, z, Z_kron, pat_idx, pat_idx_long, beta, sig_list,
-                        cuts, pat_eff, miss_mat, samp_info) {
+                        cuts, pat_eff, miss_mat, samp_info, marginal) {
 
   mean_vec <- as.numeric(X %*% beta) + rowSums(Z_kron * pat_eff[pat_idx_long, ])
   mean_mat <- matrix(mean_vec, ncol = ncol(y))

@@ -4,7 +4,7 @@
 \alias{get_DIC_ar}
 \title{Get DIC}
 \usage{
-get_DIC_ar(samps)
+get_DIC_ar(samps, marginal = FALSE)
 }
 \arguments{
 \item{y_current}{current continous outcome values}

@@ -145,9 +145,6 @@ bmrarm_fc_y_cuts <- function(y, z, X, Z_kron, cur_draws, samp_info) {
 #' @param miss_mat locations of missing values
 #' @param samp_info information for which locations to sample
 #' @param num_iter current iteration number
-#' @import tmvtnorm
-#' @importFrom truncnorm rtruncnorm
-#' @importFrom OpenMx omxMnor
 #' @return matrix
 #' @export
 
@@ -206,7 +203,6 @@ bmrarm_fc_missing <- function(y, z, X, Z_kron, cur_draws, samp_info) {
 #' @param miss_mat locations of missing values
 #' @param samp_info information for which locations to sample
 #' @param num_iter current iteration number
-#' @import tmvtnorm
 #' @importFrom magic adiag
 #' @return matrix
 #' @export
@@ -272,7 +268,7 @@ bmrarm_fc_patient <- function(y, z, X, cur_draws, samp_info, prior_list) {
 #' @param sigma residual covariance matrix
 #' @param prior_alpha prior term for shape
 #' @param prior_alpha prior term for scale
-#' @importFrom LaplacesDemon rinvwishart dinvwishart rmatrixnorm
+#' @importFrom LaplacesDemon rinvwishart rmatrixnorm
 #' @export
 
 bmrarm_fc_sig_beta <- function(y, X, Z_kron, cur_draws, samp_info) {
@@ -371,7 +367,6 @@ bmrarm_mh_ar <- function(y, X, Z_kron, cur_draws, samp_info) {
 #' @param prior_alpha prior term for shape
 #' @param prior_alpha prior term for scale
 #' @return scalar
-#' @importFrom MASS mvrnorm
 #' @export
 
 dmatrix_normal_log <- function(resid_mat, cur_draws, samp_info, sig_list) {
