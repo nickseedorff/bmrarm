@@ -24,7 +24,7 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
                          random_slope = F, ar_cov = TRUE, nsim = 1000,
                          burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
                          sig_prior = 1000000000, sd_vec = c(0.15, 0.30),
-                         N_burn_trunc = 5) {
+                         N_burn_trunc = 5, sep_sig = T) {
 
   ## Create storage
   set.seed(seed)
@@ -82,7 +82,8 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
   ## Pass prior matrices
   if(random_slope) {
     prior_list = list(prior_int = diag(priors[c(1, 3)]) * N_outcomes,
-                      prior_slope = diag(priors[c(2, 4)]) * N_outcomes)
+                      prior_slope = diag(priors[c(2, 4)]) * N_outcomes,
+                      full = diag(priors) * N_outcomes)
   } else {
     prior_list = list(prior_int = diag(priors * N_outcomes))
   }
@@ -103,7 +104,7 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
     }
 
     ## Subject specific effects
-    vals <- bmrarm_fc_patient(y, z, X, cur_draws, samp_info, prior_list)
+    vals <- bmrarm_fc_patient(y, z, X, cur_draws, samp_info, prior_list, sep_sig)
     res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
     res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
 

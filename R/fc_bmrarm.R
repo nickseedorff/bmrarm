@@ -207,7 +207,7 @@ bmrarm_fc_missing <- function(y, z, X, Z_kron, cur_draws, samp_info) {
 #' @return matrix
 #' @export
 
-bmrarm_fc_patient <- function(y, z, X, cur_draws, samp_info, prior_list) {
+bmrarm_fc_patient <- function(y, z, X, cur_draws, samp_info, prior_list, sep_sig) {
 
   ## Generate full sigma matrix
   N_pat <- samp_info$N_pat
@@ -247,7 +247,7 @@ bmrarm_fc_patient <- function(y, z, X, cur_draws, samp_info, prior_list) {
   }
 
   ## Covariance matrix for random effects
-  if(length(prior_list) == 2) {
+  if(length(prior_list) == 2 & sep_sig) {
     pat_sig_int <- rinvwishart(N_pat + samp_info$N_outcomes,
                                crossprod(res[, c(1, 3)]) +
                                  prior_list$prior_int)
@@ -255,7 +255,10 @@ bmrarm_fc_patient <- function(y, z, X, cur_draws, samp_info, prior_list) {
                                crossprod(res[, c(2, 4)]) +
                                  prior_list$prior_slope)
     pat_sig <- adiag(pat_sig_int, pat_sig_slope)[c(1, 3, 2, 4), c(1, 3, 2, 4)]
-  } else {
+  } else if (!sep_sig) {
+    pat_sig <- rinvwishart(N_pat + samp_info$N_outcomes,
+                           crossprod(res) + prior_list$full)
+  }else {
     pat_sig <- rinvwishart(N_pat + samp_info$N_outcomes,
                            crossprod(res) + prior_list$prior_int)
   }

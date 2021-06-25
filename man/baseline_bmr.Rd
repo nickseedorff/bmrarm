@@ -19,7 +19,8 @@ baseline_bmr(
   verbose = TRUE,
   sig_prior = 1e+09,
   sd_vec = c(0.15, 0.3),
-  N_burn_trunc = 5
+  N_burn_trunc = 5,
+  sep_sig = T
 )
 }
 \arguments{
