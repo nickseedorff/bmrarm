@@ -24,7 +24,7 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
                              random_slope = F, ar_cov = TRUE, nsim = 1000,
                              burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
                              sig_prior = 1000000000, sd_vec = c(0.15, 0.30),
-                             N_burn_trunc = 5, sep_sig = T) {
+                             N_burn_trunc = 5) {
 
   ## Create storage
   set.seed(seed)
@@ -102,18 +102,11 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
           control = lmeControl(opt='optim'))
     })
   })
-  priors <- as.numeric(c(VarCorr(ord_mod)[, 1][1:N_pat_effects],
-                         VarCorr(cont_mod)[, 1][1:N_pat_effects]))
 
   ## Pass prior matrices
-  if(random_slope) {
-    prior_list = list(prior_int = diag(priors[c(1, 3)]) * N_outcomes,
-                      prior_slope = diag(priors[c(2, 4)]) * N_outcomes,
-                      full = diag(priors) * N_outcomes)
-  } else {
-    prior_list = list(prior_int = diag(priors * N_outcomes))
-  }
-  res_accept <- matrix(NA, nsim, 6)
+  priors <- as.numeric(c(VarCorr(ord_mod)[, 1][1:N_pat_effects],
+                         VarCorr(cont_mod)[, 1][1:N_pat_effects]))
+  prior_mat <- diag(priors) * length(priors)
 
   for(i in 2:nsim) {
     samp_info$num_iter <- i
@@ -131,13 +124,9 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
     }
 
     ## Subject specific effects
-    vals <- bmrarm_fc_patient(y, z, X, cur_draws, samp_info, prior_list, sep_sig)
-    #vals <- bmrarm_fc_patient_siw(y, z, X, cur_draws, samp_info, sep_sig)
+    vals <- bmrarm_fc_patient(y, z, X, cur_draws, samp_info, prior_mat)
     res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
     res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
-    #res_pat_sig_sd[, i] <- cur_draws$pat_sig_sd <- vals$pat_sig_sd
-    #res_pat_sig_q[, i] <- vals$pat_sig_q
-    #res_accept[i, 3:6] <- vals$accept
 
     ## Latent values, missing values, cut points
     y_cuts <- bmrarm_fc_y_cuts(y, z, X, Z_kron, cur_draws, samp_info)
@@ -150,7 +139,7 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
 
     ## Cut points
     if(i %% 150 == 100) plot(res_cuts[4, ], type = "l")
-    if(i %% 150 == 50 & i > burn_in) print(colMeans(res_accept[(burn_in+1):nsim,], na.rm = T))
+    #if(i %% 150 == 50 & i > burn_in) print(colMeans(res_accept[(burn_in+1):nsim,], na.rm = T))
     if(i %% 150 == 0) plot(res_pat_sig[1, ], type = "l")
   }
 
