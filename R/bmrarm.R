@@ -16,7 +16,7 @@
 #' @importFrom zoo na.approx
 #' @importFrom fastDummies dummy_cols
 #' @importFrom magic adiag
-#' @importFrom nlme lme VarCorr lmeControl
+#' @importFrom nlme lme VarCorr lmeControl corAR1
 #' @export
 
 baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
