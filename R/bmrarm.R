@@ -16,7 +16,7 @@
 #' @importFrom zoo na.approx
 #' @importFrom fastDummies dummy_cols
 #' @importFrom magic adiag
-#' @importFrom lme4 lmer VarCorr lmerControl
+#' @importFrom nlme lme VarCorr lmeControl
 #' @export
 
 baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
@@ -49,44 +49,7 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
   i <- 2
   samp_info$burn_in <- burn_in
   samp_info$max_iter <- 10000000
-
-  ## Emprical bayes priors for the random effects covariance matrix
-  if(random_slope) {
-    form_string <- paste0("~ . + (1 |", patient_var, ") +
-                          (0 + ", time_var, "|", patient_var, ")")
-  } else {
-    form_string <- paste0("~ . + (1|", patient_var, ")")
-  }
-  form_use <- update(formula, as.formula(form_string))
-  ord_form <- reformulate(deparse(form_use[[3]]), response = ordinal_outcome)
-  cont_form <- reformulate(deparse(form_use[[3]]), response = cont_out_var)
-
-  ## Fit models, default to nelder_mead if optimization doesn't work
-  ord_mod <- tryCatch(expr = {
-    lmer(ord_form, data = data)
-  },
-  warning = function(w) {
-    lmer(ord_form, data = data, REML = T,
-         control = lmerControl(optimizer ="Nelder_Mead"))
-  })
-  cont_mod <- tryCatch(expr = {
-    lmer(cont_form, data = data)
-  },
-  warning = function(w) {
-    lmer(cont_form, data = data, REML = T,
-         control = lmerControl(optimizer ="Nelder_Mead"))
-  })
-  priors <- c(as.data.frame(VarCorr(ord_mod))[1:N_pat_effects, "vcov"],
-              as.data.frame(VarCorr(cont_mod))[1:N_pat_effects, "vcov"])
-
-  ## Pass prior matrices
-  if(random_slope) {
-    prior_list = list(prior_int = diag(priors[c(1, 3)]) * N_outcomes,
-                      prior_slope = diag(priors[c(2, 4)]) * N_outcomes,
-                      full = diag(priors) * N_outcomes)
-  } else {
-    prior_list = list(prior_int = diag(priors * N_outcomes))
-  }
+  res_accept <- matrix(NA, nsim, 6)
 
   for(i in 2:nsim) {
     samp_info$num_iter <- i
@@ -104,9 +67,13 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
     }
 
     ## Subject specific effects
-    vals <- bmrarm_fc_patient(y, z, X, cur_draws, samp_info, prior_list, sep_sig)
+    #vals <- bmrarm_fc_patient(y, z, X, cur_draws, samp_info, prior_list, sep_sig)
+    vals <- bmrarm_fc_patient_siw(y, z, X, cur_draws, samp_info, sep_sig)
     res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
     res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
+    res_pat_sig_sd[, i] <- cur_draws$pat_sig_sd <- vals$pat_sig_sd
+    res_pat_sig_q[, i] <- vals$pat_sig_q
+    res_accept[i, 3:6] <- vals$accept
 
     ## Latent values, missing values, cut points
     y_cuts <- bmrarm_fc_y_cuts(y, z, X, Z_kron, cur_draws, samp_info)
@@ -116,10 +83,181 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
 
     ## Update missing values
     y <- res_y[,, i]<- bmrarm_fc_missing(y, z, X, Z_kron, cur_draws, samp_info)
+    #y <- y_true
 
     ## Cut points
     if(i %% 150 == 100) plot(res_cuts[4, ], type = "l")
-    if(i %% 150 == 50) plot(res_ar, type = "l")
+    if(i %% 150 == 50 & i > burn_in) print(colMeans(res_accept[(burn_in+1):nsim,], na.rm = T))
+    if(i %% 150 == 0) plot(res_pat_sig[1, ], type = "l")
+  }
+
+  sim_use <- seq(burn_in + 1, nsim, by = thin)
+  draws <- list(
+    res_cuts = res_cuts[, sim_use],
+    res_beta = res_beta[, sim_use],
+    res_pat_sig = res_pat_sig[, sim_use],
+    res_ar = res_ar[sim_use],
+    res_sigma = res_sig[, sim_use],
+    res_y = res_y[,, sim_use],
+    res_pat_eff = res_pat_eff[,, sim_use],
+    res_accept = res_accept[sim_use, ],
+    samp_info = samp_info,
+    X = X,
+    Z_kron = Z_kron, z = z)
+  draws
+}
+
+#' PX-DA MCMC routine to sample from HBMRVAR model
+#'
+#' @param formula an object of class "formula"; a symbolic description of the model to be fitted
+#' @param data a dataframe containing outcome variables, covariates, and a patient or subject identifier
+#' @param ordinal_outcomes a character string containing the names of the ordinal outcomes
+#' @param patient_var name of the patient or subject identifier
+#' @param sig_prior prior variance on the regression coefficients
+#' @param all_draws logical with a default of FALSE which discards burn-in
+#' @param nsim positive integer, number of iterations with default of 1000
+#' @param burn_in positive integer, number of iterations to remove with default of 100. Must be >= 100.
+#' @param thin positive integer, specifiers the period of saving samples. Default of 20 due to the high autocorrelation of the cutpoints
+#' @param seed positive integer, seed for random number generation
+#' @param verbose logical, print iteration number to keep track of progress
+#' @param max_iter_rej maximum number of rejection algorithm attempts for multivariate truncated normal
+#' @return mcmc
+#' @importFrom zoo na.approx
+#' @importFrom fastDummies dummy_cols
+#' @importFrom magic adiag
+#' @importFrom nlme lme VarCorr lmeControl
+#' @export
+
+baseline_bmr_bayes <- function(formula, data, ordinal_outcome = c("y_ord"),
+                             time_var = "time", patient_var = "patient_idx",
+                             random_slope = F, ar_cov = TRUE, nsim = 1000,
+                             burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
+                             sig_prior = 1000000000, sd_vec = c(0.15, 0.30),
+                             N_burn_trunc = 5, sep_sig = T) {
+
+  ## Create storage
+  set.seed(seed)
+  bmrarm_start(env = environment())
+  cont_out_var <- setdiff(out_vars, ordinal_outcome)
+
+  ## Starting values for ordinal outcome
+  y[1:N_obs, 1] <- 0.5 + res_cuts[z, 1]
+  y[is.infinite(y[, 1]), 1] <- -0.5
+  y[is.na(y[, 1]), 1] <- 0
+
+  ## Starting values for continuous outcomes
+  df <- data.frame(patient = samp_info$pat_idx_long, y = as.numeric(y),
+                   outcome = rep(1:N_outcomes, each = N_obs)) %>%
+    group_by(patient, outcome) %>%
+    mutate(y_interp = na.approx(y, na.rm = FALSE),
+           y_interp = ifelse(!is.na(y_interp), y_interp,
+                             ifelse(row_number() == n(),
+                                    lag(y_interp), lead(y_interp))))
+  y <- matrix(df$y_interp, ncol = N_outcomes)
+  y[is.na(y)] <- 0
+  i <- 2
+  samp_info$burn_in <- burn_in
+  samp_info$max_iter <- 10000000
+
+  ## Emprical bayes priors for the random effects covariance matrix
+  if(random_slope) {
+    rand_form <- as.formula(paste0("~ ", time_var, "|", patient_var))
+  } else {
+    rand_form <- as.formula(paste0("~ 1|", patient_var))
+  }
+
+  ord_form <- reformulate(deparse(formula[[3]]), response = ordinal_outcome)
+  cont_form <- reformulate(deparse(formula[[3]]), response = cont_out_var)
+
+  ## Fit models, default to nelder_mead if optimization doesn't work
+  data_ord <- data[!is.na(data[, ordinal_outcome]), ]
+  ord_mod <- tryCatch(expr = {
+    if(ar_cov) {
+      lme(ord_form, data = data_ord, random = rand_form,
+          correlation = corAR1(form = ~ 1 | pat_idx))
+    } else {
+      lme(ord_form, data = data_ord, random = rand_form)
+    }
+  },
+  warning = function(w) {
+    if(ar_cov) {
+      lme(ord_form, data = data_ord, random = rand_form,
+          correlation = corAR1(form = ~ 1 | pat_idx),
+          control = lmeControl(opt='optim'))
+    } else {
+      lme(ord_form, data = data_ord, random = rand_form,
+          control = lmeControl(opt='optim'))
+    }
+  })
+  data_cont <- data[!is.na(data[, cont_out_var]), ]
+  cont_mod <- tryCatch(expr = {
+    if(ar_cov) {
+      lme(cont_form, data = data_cont, random = rand_form,
+          correlation = corAR1(form = ~ 1 | pat_idx))
+    } else {
+      lme(cont_form, data = data_cont, random = rand_form)
+    }
+  },
+  warning = function(w) {
+    if(ar_cov) {
+      lme(cont_form, data = data_cont, random = rand_form,
+          correlation = corAR1(form = ~ 1 | pat_idx),
+          control = lmeControl(opt='optim'))
+    } else {
+      lme(cont_form, data = data_cont, random = rand_form,
+          control = lmeControl(opt='optim'))
+    }
+  })
+  priors <- as.numeric(c(VarCorr(ord_mod)[, 1][1:N_pat_effects],
+                         VarCorr(cont_mod)[, 1][1:N_pat_effects]))
+
+  ## Pass prior matrices
+  if(random_slope) {
+    prior_list = list(prior_int = diag(priors[c(1, 3)]) * N_outcomes,
+                      prior_slope = diag(priors[c(2, 4)]) * N_outcomes,
+                      full = diag(priors) * N_outcomes)
+  } else {
+    prior_list = list(prior_int = diag(priors * N_outcomes))
+  }
+  res_accept <- matrix(NA, nsim, 6)
+
+  for(i in 2:nsim) {
+    samp_info$num_iter <- i
+
+    ## Regression coefficients
+    vals <- bmrarm_fc_sig_beta(y, X, Z_kron, cur_draws, samp_info)
+    res_beta[, i] <- cur_draws$beta <- vals$beta
+    res_sig[, i] <- cur_draws$sigma <- vals$sig
+
+    # Autoregressive parameter
+    if(samp_info$ar_cov) {
+      vals <- bmrarm_mh_ar(y, X, Z_kron, cur_draws, samp_info)
+      res_ar[i] <- cur_draws$ar <- vals$ar
+      res_accept[i, 2] <- vals$accept
+    }
+
+    ## Subject specific effects
+    #vals <- bmrarm_fc_patient(y, z, X, cur_draws, samp_info, prior_list, sep_sig)
+    vals <- bmrarm_fc_patient_siw(y, z, X, cur_draws, samp_info, sep_sig)
+    res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
+    res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
+    res_pat_sig_sd[, i] <- cur_draws$pat_sig_sd <- vals$pat_sig_sd
+    res_pat_sig_q[, i] <- vals$pat_sig_q
+    res_accept[i, 3:6] <- vals$accept
+
+    ## Latent values, missing values, cut points
+    y_cuts <- bmrarm_fc_y_cuts(y, z, X, Z_kron, cur_draws, samp_info)
+    y <-  res_y[,, i] <- y_cuts$y
+    res_cuts[, i] <- cur_draws$cuts <- y_cuts$cuts
+    res_accept[i, 1] <- y_cuts$accept
+
+    ## Update missing values
+    y <- res_y[,, i]<- bmrarm_fc_missing(y, z, X, Z_kron, cur_draws, samp_info)
+    #y <- y_true
+
+    ## Cut points
+    if(i %% 150 == 100) plot(res_cuts[4, ], type = "l")
+    if(i %% 150 == 50 & i > burn_in) print(colMeans(res_accept[(burn_in+1):nsim,], na.rm = T))
     if(i %% 150 == 0) plot(res_pat_sig[1, ], type = "l")
   }
 

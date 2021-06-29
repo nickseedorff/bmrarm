@@ -228,7 +228,7 @@ bmrarm_start <- function(env) {
                     beta_sig_prior = diag(rep(sig_prior, N_covars)),
                     N_outcomes = N_outcomes, N_covars = N_covars,
                     N_pat_effects = N_pat_effects,  N_cat = N_cat,
-                    sd_c = sd_vec[1], sd_ar = sd_vec[2], sd_pat_sd = sd_vec[3],
+                    sd_c = sd_vec[1], sd_ar = sd_vec[2], sd_pat_sd = sd_vec[3:6],
                     pats_for_cut_probs = pats_for_cut_probs,
                     N_pats_for_probs = length(pats_for_cut_probs),
                     slope = random_slope,
