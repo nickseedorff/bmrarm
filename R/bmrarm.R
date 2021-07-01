@@ -143,10 +143,10 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
     y <- res_y[,, i]<- bmrarm_fc_missing(y, z, X, Z_kron, cur_draws, samp_info)
 
     ## Cut points
-    if(i %% 150 == 100) plot(res_cuts[4, ], type = "l")
-    #if(i %% 150 == 100) plot(res_pat_sig_q[6, ], type = "l")
+    #if(i %% 150 == 100) plot(res_cuts[4, ], type = "l")
+    if(i %% 150 == 100) plot(res_pat_sig_sd[1, ], type = "l")
     if(i %% 150 == 50 & i > burn_in) print(round(c(colMeans(res_accept[(burn_in+1):nsim,], na.rm = T), i), 3))
-    if(i %% 150 == 0) plot(res_pat_sig_q[1, ], type = "l")
+    if(i %% 150 == 0) plot(res_pat_sig[1, ], type = "l")
   }
 
   sim_use <- seq(burn_in + 1, nsim, by = thin)

@@ -397,7 +397,7 @@ bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list, Z_k
 
   ## Generate full sigma matrix
   N_pat <- samp_info$N_pat
-  sig_alpha_inv <- chol2inv(chol(cur_draws$pat_sig))
+  sig_alpha_inv <- chol2inv(chol(cur_draws$pat_sig_q))
   sig_inv <- chol2inv(chol(cur_draws$sigma))
   resid_mat <- y - X %*% cur_draws$beta
   N_pat_eff <- ncol(samp_info$pat_z_kron[[1]])
@@ -433,7 +433,7 @@ bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list, Z_k
   }
 
   ## Correlation matrix
-  cur_draws$pat_sig <- rinvwishart(N_pat + N_pat_eff + 1, crossprod(res) + diag(rep(1, N_pat_eff)))
+  cur_draws$pat_sig_q <- rinvwishart(N_pat + N_pat_eff + 1, crossprod(res) + diag(rep(1, N_pat_eff)))
 
   ## SD parameters
   accept_vec <- rep(0, N_pat_eff)
@@ -442,6 +442,10 @@ bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list, Z_k
     cur_draws2 <- cur_draws
     cur_draws2$pat_sig_sd[i] <- rnorm(1, cur_draws$pat_sig_sd[i],
                                       sd = samp_info$sd_pat_sd[i])
+    cur_draws2$pat_sig_sd[i] <- rtruncnorm(1, a = 0.25, b = 4,
+                                           mean = cur_draws$pat_sig_sd[i],
+                                           sd = samp_info$sd_pat_sd[i])
+
 
     resid_mat_old <- y -  X %*% cur_draws$beta -
       matrix(rowSums(Z_kron * (res[samp_info$pat_idx_long, ] %*%
@@ -457,17 +461,23 @@ bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list, Z_k
     sig_list <- get_sig_list(cur_draws, samp_info)
     comp_old <- dmatrix_normal_log(resid_mat_old, cur_draws, samp_info, sig_list)
     comp_new <- dmatrix_normal_log(resid_mat_new, cur_draws2, samp_info, sig_list)
-    compar_val <- comp_new - comp_old
+    compar_val <- comp_new - comp_old +
+      log(truncnorm::dtruncnorm(cur_draws$pat_sig_sd[i], 0.25, 4,
+                                mean = cur_draws2$pat_sig_sd[i],
+                                sd = samp_info$sd_pat_sd[i])) -
+      log(truncnorm::dtruncnorm(cur_draws2$pat_sig_sd[i], 0.25, 4,
+                                mean = cur_draws$pat_sig_sd[i],
+                                sd = samp_info$sd_pat_sd[i]))
 
-    if(compar_val >= log(runif(1)) & cur_draws2$pat_sig_sd[i] >= 0.2 &
-       cur_draws2$pat_sig_sd[i] <= 5) {
+    if(compar_val >= log(runif(1)) & cur_draws2$pat_sig_sd[i] >= -Inf &
+       cur_draws2$pat_sig_sd[i] <= Inf) {
       cur_draws$pat_sig_sd[i] <- cur_draws2$pat_sig_sd[i]
       accept_vec[i] <- 1
     }
   }
 
   list(pat_effects = res %*% diag(cur_draws$pat_sig_sd),
-       pat_sig = cur_draws$pat_sig,
+       pat_sig = diag(cur_draws$pat_sig_sd) %*% cur_draws$pat_sig_q %*% diag(cur_draws$pat_sig_sd),
        pat_sig_sd = cur_draws$pat_sig_sd, accept_vec = accept_vec,
-       pat_sig_q = diag(cur_draws$pat_sig_sd) %*% cur_draws$pat_sig %*% diag(cur_draws$pat_sig_sd))
+       pat_sig_q = cur_draws$pat_sig_q)
 }
