@@ -459,8 +459,8 @@ bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list, Z_k
     comp_new <- dmatrix_normal_log(resid_mat_new, cur_draws2, samp_info, sig_list)
     compar_val <- comp_new - comp_old
 
-    if(compar_val >= log(runif(1)) & cur_draws2$pat_sig_sd[i] >= 0.2 &
-       cur_draws2$pat_sig_sd[i] <= 5) {
+    if(compar_val >= log(runif(1)) & cur_draws2$pat_sig_sd[i] >= 0.25 &
+       cur_draws2$pat_sig_sd[i] <= 4) {
       cur_draws$pat_sig_sd[i] <- cur_draws2$pat_sig_sd[i]
       accept_vec[i] <- 1
     }
