@@ -2,7 +2,7 @@ library(devtools)
 load_all()
 i <- 2
 sim_data <- gen_ar_errors(N = 7, N_pat = 48, unequal = T, seed = 4,
-                          slope = T, ar_cov = F)
+                          slope = T, ar_cov = T)
 
 
 crossprod(sim_data$alpha) / nrow(sim_data$alpha)

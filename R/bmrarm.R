@@ -64,8 +64,8 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
   data_ord <- data[!is.na(data[, ordinal_outcome]), ]
   data_cont <- data[!is.na(data[, cont_out_var]), ]
   cor_struct <- if(ar_cov) {
-    #cor_struct <- corAR1(form = as.formula(~ 1 | pat_idx))
-    cor_struct <- NULL
+    cor_struct <- corAR1(form = as.formula(~ 1 | pat_idx))
+    #cor_struct <- NULL
   } else {
     cor_struct <- NULL
   }
@@ -156,7 +156,8 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
     res_accept = res_accept[sim_use, ],
     samp_info = samp_info,
     X = X,
-    Z_kron = Z_kron, z = z)
+    Z_kron = Z_kron, z = z,
+    priors = )
   draws
 }
 
