@@ -164,7 +164,7 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
     samp_info = samp_info,
     X = X,
     Z_kron = Z_kron, z = z,
-    priors = )
+    priors = priors)
   draws
 }
 
