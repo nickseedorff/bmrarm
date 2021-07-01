@@ -393,7 +393,7 @@ dmatrix_normal_log <- function(resid_mat, cur_draws, samp_info, sig_list) {
 #' @return matrix
 #' @export
 
-bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list) {
+bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list, Z_kron) {
 
   ## Generate full sigma matrix
   N_pat <- samp_info$N_pat
