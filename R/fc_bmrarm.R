@@ -442,10 +442,6 @@ bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list, Z_k
     cur_draws2 <- cur_draws
     cur_draws2$pat_sig_sd[i] <- rnorm(1, cur_draws$pat_sig_sd[i],
                                       sd = samp_info$sd_pat_sd[i])
-    cur_draws2$pat_sig_sd[i] <- rtruncnorm(1, a = 0.2, b = 5,
-                                           mean = cur_draws$pat_sig_sd[i],
-                                           sd = samp_info$sd_pat_sd[i])
-
 
     resid_mat_old <- y -  X %*% cur_draws$beta -
       matrix(rowSums(Z_kron * (res[samp_info$pat_idx_long, ] %*%
@@ -461,16 +457,10 @@ bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list, Z_k
     sig_list <- get_sig_list(cur_draws, samp_info)
     comp_old <- dmatrix_normal_log(resid_mat_old, cur_draws, samp_info, sig_list)
     comp_new <- dmatrix_normal_log(resid_mat_new, cur_draws2, samp_info, sig_list)
-    compar_val <- comp_new - comp_old +
-      log(truncnorm::dtruncnorm(cur_draws$pat_sig_sd[i], 0.2, 5,
-                                mean = cur_draws2$pat_sig_sd[i],
-                                sd = samp_info$sd_pat_sd[i])) -
-      log(truncnorm::dtruncnorm(cur_draws2$pat_sig_sd[i], 0.2, 5,
-                                mean = cur_draws$pat_sig_sd[i],
-                                sd = samp_info$sd_pat_sd[i]))
+    compar_val <- comp_new - comp_old
 
-    if(compar_val >= log(runif(1)) & cur_draws2$pat_sig_sd[i] >= -Inf &
-       cur_draws2$pat_sig_sd[i] <= Inf) {
+    if(compar_val >= log(runif(1)) & cur_draws2$pat_sig_sd[i] >= 0.2 &
+       cur_draws2$pat_sig_sd[i] <= 5) {
       cur_draws$pat_sig_sd[i] <- cur_draws2$pat_sig_sd[i]
       accept_vec[i] <- 1
     }
