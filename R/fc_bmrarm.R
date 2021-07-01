@@ -377,3 +377,97 @@ dmatrix_normal_log <- function(resid_mat, cur_draws, samp_info, sig_list) {
   }
   sum(pat_vals)
 }
+
+#' Full conditional draws of the latent continuous values
+#'
+#' @param y matrix of multivariate observations
+#' @param z matrix of ordinal voutcomes
+#' @param sig covariance matrix for the VAR process
+#' @param sig0 for the initial values
+#' @param M transition matrix for the VAR(1) component
+#' @param cuts current threshold values
+#' @param miss_mat locations of missing values
+#' @param samp_info information for which locations to sample
+#' @param num_iter current iteration number
+#' @import tmvtnorm
+#' @return matrix
+#' @export
+
+bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list) {
+
+  ## Generate full sigma matrix
+  N_pat <- samp_info$N_pat
+  sig_alpha_inv <- chol2inv(chol(cur_draws$pat_sig))
+  sig_inv <- chol2inv(chol(cur_draws$sigma))
+  resid_mat <- y - X %*% cur_draws$beta
+  N_pat_eff <- ncol(samp_info$pat_z_kron[[1]])
+
+  ## Sigma inverses only needed is autoregressive covariance matrix
+  if(samp_info$ar_cov) {
+    sig_list <- get_sig_list(cur_draws, samp_info)
+  }
+
+  ## Patient effects
+  res <- matrix(NA, nrow = N_pat, ncol = N_pat_eff)
+
+  for(i in 1:N_pat) {
+    ## Get locations and time matrix for patient
+    locs <- samp_info$pat_locs[[i]]
+    time_ind <- samp_info$pat_time_ind[i]
+    resid_vec <- as.numeric(resid_mat[locs, ])
+    pat_Z <- samp_info$pat_z_kron[[i]] %*% diag(cur_draws$pat_sig_sd)
+
+    ## Patient specific covariance matrix
+    if(samp_info$ar_cov) {
+      pat_sig_inv <- sig_list$sig_inv_list[[time_ind]]
+    } else {
+      pat_sig_inv <- kronecker(sig_inv, diag(rep(1, samp_info$pat_N_obs[[i]])))
+    }
+
+    ## Cross products, covariance, alpha hat
+    Z_sig_prod <- crossprod(pat_Z, pat_sig_inv)
+    post_cov <- chol2inv(chol(Z_sig_prod %*% pat_Z + sig_alpha_inv))
+    post_mean <- post_cov %*% Z_sig_prod %*% resid_vec
+    L <- t(chol(post_cov))
+    res[i, ] <- L %*% rnorm(length(post_mean)) + post_mean
+  }
+
+  ## Correlation matrix
+  cur_draws$pat_sig <- rinvwishart(N_pat + N_pat_eff + 1, crossprod(res) + diag(rep(1, 4)))
+
+  ## SD parameters
+  accept_vec <- rep(0, N_pat_eff)
+  for(i in 1:N_pat_eff) {
+    ## Propose new values
+    cur_draws2 <- cur_draws
+    cur_draws2$pat_sig_sd[i] <- rnorm(1, cur_draws$pat_sig_sd[i],
+                                      sd = samp_info$sd_pat_sd[i])
+
+    resid_mat_old <- y -  X %*% cur_draws$beta -
+      matrix(rowSums(Z_kron * (res[samp_info$pat_idx_long, ] %*%
+                                 diag(cur_draws$pat_sig_sd))),
+             ncol = samp_info$N_outcomes)
+
+    resid_mat_new <- y -  X %*% cur_draws$beta -
+      matrix(rowSums(Z_kron * (res[samp_info$pat_idx_long, ] %*%
+                                 diag(cur_draws2$pat_sig_sd))),
+             ncol = samp_info$N_outcomes)
+
+    ## Calculate comparison values
+    sig_list <- get_sig_list(cur_draws, samp_info)
+    comp_old <- dmatrix_normal_log(resid_mat_old, cur_draws, samp_info, sig_list)
+    comp_new <- dmatrix_normal_log(resid_mat_new, cur_draws2, samp_info, sig_list)
+    compar_val <- comp_new - comp_old
+
+    if(compar_val >= log(runif(1)) & cur_draws2$pat_sig_sd[i] >= 0.1 &
+       cur_draws2$pat_sig_sd[i] <= 10) {
+      cur_draws$pat_sig_sd[i] <- cur_draws2$pat_sig_sd[i]
+      accept_vec[i] <- 1
+    }
+  }
+
+  list(pat_effects = res %*% diag(cur_draws$pat_sig_sd),
+       pat_sig = cur_draws$pat_sig,
+       pat_sig_sd = cur_draws$pat_sig_sd, accept_vec = accept_vec,
+       pat_sig_q = diag(cur_draws$pat_sig_sd) %*% cur_draws$pat_sig %*% diag(cur_draws$pat_sig_sd))
+}

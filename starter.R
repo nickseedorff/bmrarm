@@ -1,8 +1,8 @@
 library(devtools)
 load_all()
-i <- 2
+i <- 3
 sim_data <- gen_ar_errors(N = 7, N_pat = 48, unequal = T, seed = 4,
-                          slope = T, ar_cov = T)
+                          slope = T, ar_cov = F)
 
 
 crossprod(sim_data$alpha) / nrow(sim_data$alpha)
@@ -14,9 +14,10 @@ crossprod(MASS::mvrnorm(100, mu = c(0, 0, 0, 0) ,Sigma = sim_data$sig_alpha)) / 
 formula = cbind(y_ord, y2) ~ time; data = sim_data$data;
 ordinal_outcome = "y_ord"; patient_var = "pat_idx";
 random_slope = T; time_var = "time"; ar_cov = F;
-burn_in = 500; nsim = 2500; thin = 1; seed = 3;
+burn_in = 100; nsim = 5000; thin = 1; seed = 3;
 verbose = TRUE; sig_prior = 1000000000;
-sd_vec = c(0.15, 0.30, 0.25, 0.25, 0.4, 0.15)
+sd_vec = c(0.15, 0.30, 0.35, 0.1, 0.25, 0.1)
+sd_vec[3:6] <- sd_vec[3:6] * 1
 
 ## Create storage
 set.seed(seed)

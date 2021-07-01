@@ -125,9 +125,12 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
     }
 
     ## Subject specific effects
-    vals <- bmrarm_fc_patient(y, z, X, cur_draws, samp_info, prior_mat)
+    vals <- bmrarm_fc_patient_siw(y, z, X, cur_draws, samp_info, 1)
     res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
     res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
+    res_pat_sig_q[,i] <- cur_draws$pat_sig_q <- vals$pat_sig_q
+    res_pat_sig_sd[,i] <- cur_draws$pat_sig_sd <- vals$pat_sig_sd
+    res_accept[i, 3:6] <- vals$accept_vec
 
     ## Latent values, missing values, cut points
     y_cuts <- bmrarm_fc_y_cuts(y, z, X, Z_kron, cur_draws, samp_info)
@@ -139,9 +142,10 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
     y <- res_y[,, i]<- bmrarm_fc_missing(y, z, X, Z_kron, cur_draws, samp_info)
 
     ## Cut points
-    if(i %% 150 == 100) plot(res_cuts[4, ], type = "l")
-    if(i %% 150 == 50 & i > burn_in) print(colMeans(res_accept[(burn_in+1):nsim,], na.rm = T))
-    if(i %% 150 == 0) plot(res_pat_sig[1, ], type = "l")
+    #if(i %% 150 == 100) plot(res_cuts[4, ], type = "l")
+    if(i %% 150 == 100) plot(res_pat_sig_q[6, ], type = "l")
+    if(i %% 150 == 50 & i > burn_in) print(round(c(colMeans(res_accept[(burn_in+1):nsim,], na.rm = T), i), 3))
+    if(i %% 150 == 0) plot(res_pat_sig_sd[1, ], type = "l")
   }
 
   sim_use <- seq(burn_in + 1, nsim, by = thin)
@@ -149,6 +153,8 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
     res_cuts = res_cuts[, sim_use],
     res_beta = res_beta[, sim_use],
     res_pat_sig = res_pat_sig[, sim_use],
+    res_pat_sig_q = res_pat_sig_q[, sim_use],
+    res_pat_sig_sd = res_pat_sig_sd[, sim_use],
     res_ar = res_ar[sim_use],
     res_sigma = res_sig[, sim_use],
     res_y = res_y[,, sim_use],
