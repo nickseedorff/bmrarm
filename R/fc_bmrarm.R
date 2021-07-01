@@ -442,7 +442,7 @@ bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list, Z_k
     cur_draws2 <- cur_draws
     cur_draws2$pat_sig_sd[i] <- rnorm(1, cur_draws$pat_sig_sd[i],
                                       sd = samp_info$sd_pat_sd[i])
-    cur_draws2$pat_sig_sd[i] <- rtruncnorm(1, a = 0.25, b = 4,
+    cur_draws2$pat_sig_sd[i] <- rtruncnorm(1, a = 0.2, b = 5,
                                            mean = cur_draws$pat_sig_sd[i],
                                            sd = samp_info$sd_pat_sd[i])
 
@@ -462,10 +462,10 @@ bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list, Z_k
     comp_old <- dmatrix_normal_log(resid_mat_old, cur_draws, samp_info, sig_list)
     comp_new <- dmatrix_normal_log(resid_mat_new, cur_draws2, samp_info, sig_list)
     compar_val <- comp_new - comp_old +
-      log(truncnorm::dtruncnorm(cur_draws$pat_sig_sd[i], 0.25, 4,
+      log(truncnorm::dtruncnorm(cur_draws$pat_sig_sd[i], 0.2, 5,
                                 mean = cur_draws2$pat_sig_sd[i],
                                 sd = samp_info$sd_pat_sd[i])) -
-      log(truncnorm::dtruncnorm(cur_draws2$pat_sig_sd[i], 0.25, 4,
+      log(truncnorm::dtruncnorm(cur_draws2$pat_sig_sd[i], 0.2, 5,
                                 mean = cur_draws$pat_sig_sd[i],
                                 sd = samp_info$sd_pat_sd[i]))
 
