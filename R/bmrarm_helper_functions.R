@@ -255,7 +255,7 @@ bmrarm_start <- function(env) {
 
   ## Initialize
   res_beta[, 1] <- res_pat_eff[,, 1] <- 0
-  res_ar[1] <- 0.5
+  res_ar[1] <- 0
   res_pat_sig[, 1] <- pat_sig_q <- diag(rep(0.1, N_pat_effects * N_outcomes))
   pat_sig_sd <- rep(1, N_pat_effects * N_outcomes)
   res_sig[, 1] <- diag(rep(1, N_outcomes))

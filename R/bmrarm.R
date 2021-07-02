@@ -24,7 +24,7 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
                              random_slope = F, ar_cov = TRUE, nsim = 1000,
                              burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
                              sig_prior = 1000000000, sd_vec = c(0.15, 0.30),
-                             N_burn_trunc = 5, prior_siw_uni = c(0.2, 5)) {
+                             N_burn_trunc = 5, prior_siw_uni = c(0.1, 10)) {
 
   ## Create storage
   set.seed(seed)
@@ -121,9 +121,10 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
     # Autoregressive parameter
     if(samp_info$ar_cov) {
       vals <- bmrarm_mh_ar(y, X, Z_kron, cur_draws, samp_info)
-      res_ar[i] <- cur_draws$ar <- vals$ar
+      cur_draws$ar <- vals$ar
       res_accept[i, 2] <- vals$accept
     }
+    res_ar[i] <- cur_draws$ar
 
     ## Subject specific effects
     vals <- bmrarm_fc_patient_siw(y, z, X, cur_draws, samp_info, 1, Z_kron, prior_siw_uni)
@@ -289,9 +290,10 @@ baseline_bmr_old <- function(formula, data, ordinal_outcome = c("y_ord"),
     # Autoregressive parameter
     if(samp_info$ar_cov) {
       vals <- bmrarm_mh_ar(y, X, Z_kron, cur_draws, samp_info)
-      res_ar[i] <- cur_draws$ar <- vals$ar
+      cur_draws$ar <- vals$ar
       res_accept[i, 2] <- vals$accept
     }
+    res_ar[i] <- cur_draws$ar
 
     ## Subject specific effects
     vals <- bmrarm_fc_patient(y, z, X, cur_draws, samp_info, prior_mat)
