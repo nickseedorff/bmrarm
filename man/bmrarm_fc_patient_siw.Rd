@@ -4,7 +4,16 @@
 \alias{bmrarm_fc_patient_siw}
 \title{Full conditional draws of the latent continuous values}
 \usage{
-bmrarm_fc_patient_siw(y, z, X, cur_draws, samp_info, prior_list, Z_kron)
+bmrarm_fc_patient_siw(
+  y,
+  z,
+  X,
+  cur_draws,
+  samp_info,
+  prior_list,
+  Z_kron,
+  prior_siw_uni
+)
 }
 \arguments{
 \item{y}{matrix of multivariate observations}

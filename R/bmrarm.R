@@ -24,7 +24,7 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
                              random_slope = F, ar_cov = TRUE, nsim = 1000,
                              burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
                              sig_prior = 1000000000, sd_vec = c(0.15, 0.30),
-                             N_burn_trunc = 5) {
+                             N_burn_trunc = 5, prior_siw_uni = c(0.2, 5)) {
 
   ## Create storage
   set.seed(seed)
@@ -126,7 +126,7 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
     }
 
     ## Subject specific effects
-    vals <- bmrarm_fc_patient_siw(y, z, X, cur_draws, samp_info, 1, Z_kron)
+    vals <- bmrarm_fc_patient_siw(y, z, X, cur_draws, samp_info, 1, Z_kron, prior_siw_uni)
     res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
     res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
     res_pat_sig_q[,i] <- cur_draws$pat_sig_q <- vals$pat_sig_q
