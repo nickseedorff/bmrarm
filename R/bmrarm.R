@@ -24,7 +24,7 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
                              random_slope = F, ar_cov = TRUE, nsim = 1000,
                              burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
                              sig_prior = 1000000000, sd_vec = c(0.15, 0.30),
-                             N_burn_trunc = 5, prior_siw_uni = c(0.1, 10)) {
+                             N_burn_trunc = 5, prior_siw_uni = c(0.2, 5)) {
 
   ## Create storage
   set.seed(seed)
