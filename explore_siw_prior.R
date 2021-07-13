@@ -11,6 +11,10 @@ for(i in 1:10000) {
 }
 
 
-plot(density(arr1[1,1, ], from = 0, to = 15))
-lines(density(arr2[1,1, ], from = 0, to = 15), col = 2)
+
+
+plot(density(arr1[1,1, ], from = 0, to = 15), lwd = 3)
+lines(density(arr2[1,1, ], from = 0, to = 15), col = 2, lwd = 3)
+legend("topright", legend = c("IW(I, 5)", "SIW(I, 5, 0.2, 5)"), lty = 1, col = c(1, 2), lwd = 3)
+
 lines(density(arr3[1,1, ], from = 0, to = 15), col = 3)

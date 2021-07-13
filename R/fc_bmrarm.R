@@ -433,7 +433,7 @@ bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list, Z_k
   }
 
   ## Correlation matrix
-  cur_draws$pat_sig_q <- rinvwishart(N_pat + N_pat_eff + 1, crossprod(res) + diag(rep(1, N_pat_eff)))
+  cur_draws$pat_sig_q <- rinvwishart(N_pat + N_pat_eff, crossprod(res) + diag(rep(1, N_pat_eff)))
 
   ## SD parameters
   accept_vec <- rep(0, N_pat_eff)

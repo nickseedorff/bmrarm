@@ -307,6 +307,101 @@ get_dev_ar <- function(y, X, z, Z_kron, pat_idx, pat_idx_long, beta, sig_list,
 }
 
 
+#' Get DIC
+#'
+#' @param y_current current continous outcome values
+#' @param mean_vec vector of mean values
+#' @param pre_calc_mat a pre-calculated matrix
+#' @param ord_loc number of ordinal outcomes
+#' @return scalar
+
+get_pred <- function(samps, new_X = NULL) {
+
+  N_outcomes <- samps$samp_info$N_outcomes
+  z <- samps$z
+  miss_mat <- samps$samp_info$miss_mat
+  pat_idx <- samps$samp_info$pat_idx_long
+  pat_idx_long <- samps$samp_info$pat_idx_long
+  if(is.null(new_X)) {
+    X <- samps$X
+  } else {
+    X <- new_X
+  }
+  Z_kron <- samps$Z_kron
+
+  ## Calculate mean deviance
+  mean_dev <- lapply(1:ncol(samps$res_beta), function(x){
+    beta <- matrix(samps$res_beta[, x], ncol = N_outcomes)
+    sig_tmp <- matrix(samps$res_sigma[, x], ncol = N_outcomes)
+    pat_eff <- samps$res_pat_eff[,, x]
+    y_use <- samps$res_y[,, x]
+    cuts <- samps$res_cuts[, x]
+    ar_tmp <- samps$res_ar[x]
+    cur_draws <- list(ar = ar_tmp, sigma = sig_tmp)
+    sig_list <- get_sig_list(cur_draws, samps$samp_info)
+
+    for(j in 1:length(sig_list$marg_cov_list)) {
+      sig_list$marg_cov_inv_list[[j]] <- chol2inv(chol(sig_list$marg_cov_list[[j]]))
+    }
+
+    mean_vec <- as.numeric(X %*% beta) + rowSums(Z_kron * pat_eff[pat_idx_long, ])
+    mean_mat <- matrix(mean_vec, ncol = ncol(y_use))
+    y_mat <- y_use
+    y_mat[] <- NA
+    y_ord <- as.vector(y_mat[, 1])
+
+    ## Calculate cuts
+    cuts_low <- cuts[z]
+    cuts_low[is.na(cuts_low)] <- -Inf
+    cuts_high <- cuts[z + 1]
+    cuts_high[is.na(cuts_high)] <- Inf
+
+    ## storage for likelihood evaluations
+    N_pat <- length(unique(pat_idx))
+    y_last <- matrix(NA, nrow = N_pat, 2)
+    for(i in 1:N_pat) {
+      ## Locations of vectors to sample
+      locs <- samps$samp_info$pat_locs[[i]]
+      times <- samps$samp_info$pat_times[[i]]
+      dist_mat <- ar_tmp ^ as.matrix(dist(times, diag = T, upper = T))
+      chol_mat <- kronecker(chol(sig_tmp), chol(dist_mat))
+      y_mat[locs,] <- LaplacesDemon::rmvnc(1, as.vector(mean_mat[locs, ]), chol_mat)
+      #y_mat[locs,] <- as.vector(mean_mat[locs, ]) + chol_mat %*% rnorm(length(locs) * 2)
+
+      ## Predict final locations
+      locs_use <- c(length(locs), 2 * length(locs))
+      locs_other <- setdiff(1:(2 * length(locs)), locs_use)
+      full_sig <- kronecker(sig_tmp, dist_mat)
+      pre_calcs <- pre_calc_ar(full_sig, locs_use)
+      mean_val <- mean_mat[locs, ][locs_use] +
+        pre_calcs$mean_pre %*% (y_use[locs, ][-locs_use] - mean_mat[locs, ][-locs_use])
+      y_last[i, ] <- MASS::mvrnorm(1, mean_val, Sigma = pre_calcs$cond_cov)
+    }
+
+    ## Discretize
+    for(k in 1:length(y_ord)) {
+      for(l in 1:(length(cuts) - 1)) {
+        if(y_mat[k, 1] > cuts[l] & y_mat[k, 1] <= cuts[l + 1]) {
+          y_ord[k] <- l
+        }
+      }
+    }
+
+    y_last_tmp <- y_last
+    for(k in 1:nrow(y_last)) {
+      for(l in 1:(length(cuts) - 1)) {
+        if(y_last_tmp[k, 1] > cuts[l] & y_last_tmp[k, 1] <= cuts[l + 1]) {
+          y_last[k, 1] <- l
+        }
+      }
+    }
+
+    print(x)
+    list(all_preds = cbind(y_ord, y_mat[, 2]),
+         last_preds = y_last)
+  })
+}
+
 
 
 #' Get DIC
