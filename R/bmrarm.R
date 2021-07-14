@@ -127,16 +127,16 @@ baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
     res_ar[i] <- cur_draws$ar
 
     ## Subject specific effects
-    vals <- bmrarm_fc_patient(y, z, X, cur_draws, samp_info, prior_mat)
-    res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
-    res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
-
-    # vals <- bmrarm_fc_patient_siw(y, z, X, cur_draws, samp_info, 1, Z_kron, prior_siw_uni)
+    # vals <- bmrarm_fc_patient(y, z, X, cur_draws, samp_info, prior_mat)
     # res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
     # res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
-    # res_pat_sig_q[,i] <- cur_draws$pat_sig_q <- vals$pat_sig_q
-    # res_pat_sig_sd[,i] <- cur_draws$pat_sig_sd <- vals$pat_sig_sd
-    # res_accept[i, 3:6] <- vals$accept_vec
+
+    vals <- bmrarm_fc_patient_siw(y, z, X, cur_draws, samp_info, 1, Z_kron, prior_siw_uni)
+    res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
+    res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
+    res_pat_sig_q[,i] <- cur_draws$pat_sig_q <- vals$pat_sig_q
+    res_pat_sig_sd[,i] <- cur_draws$pat_sig_sd <- vals$pat_sig_sd
+    res_accept[i, 3:6] <- vals$accept_vec
 
     ## Latent values, missing values, cut points
     y_cuts <- bmrarm_fc_y_cuts(y, z, X, Z_kron, cur_draws, samp_info)
