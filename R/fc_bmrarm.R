@@ -248,6 +248,8 @@ bmrarm_fc_patient <- function(y, z, X, cur_draws, samp_info, prior_mat) {
 
   ## Covariance matrix for random effects
   pat_sig <- rinvwishart(N_pat + N_pat_eff, crossprod(res) + prior_mat)
+  pat_sig <- solve(rWishart(1, df = N_pat + N_pat_eff,
+                            Sigma = qr.solve(crossprod(res) + prior_mat / N_pat_eff))[,,1])
   list(pat_effects = res, pat_sig = pat_sig)
 }
 
@@ -433,7 +435,7 @@ bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list, Z_k
   }
 
   ## Correlation matrix
-  cur_draws$pat_sig_q <- rinvwishart(N_pat + N_pat_eff, crossprod(res) + diag(rep(1, N_pat_eff)))
+  cur_draws$pat_sig_q <- rinvwishart(N_pat + N_pat_eff + 1, crossprod(res) + diag(rep(1, N_pat_eff)))
 
   ## SD parameters
   accept_vec <- rep(0, N_pat_eff)
