@@ -350,12 +350,6 @@ get_pred <- function(samps, new_X = NULL) {
     y_mat[] <- NA
     y_ord <- as.vector(y_mat[, 1])
 
-    ## Calculate cuts
-    cuts_low <- cuts[z]
-    cuts_low[is.na(cuts_low)] <- -Inf
-    cuts_high <- cuts[z + 1]
-    cuts_high[is.na(cuts_high)] <- Inf
-
     ## storage for likelihood evaluations
     N_pat <- length(unique(pat_idx))
     y_last <- matrix(NA, nrow = N_pat, 2)
@@ -399,6 +393,79 @@ get_pred <- function(samps, new_X = NULL) {
     print(x)
     list(all_preds = cbind(y_ord, y_mat[, 2]),
          last_preds = y_last)
+  })
+}
+
+#' Get DIC
+#'
+#' @param y_current current continous outcome values
+#' @param mean_vec vector of mean values
+#' @param pre_calc_mat a pre-calculated matrix
+#' @param ord_loc number of ordinal outcomes
+#' @return scalar
+
+get_forecasts <- function(samps) {
+
+  N_outcomes <- samps$samp_info$N_outcomes
+  z <- samps$z
+  miss_mat <- samps$samp_info$miss_mat
+  pat_idx <- samps$samp_info$pat_idx_long
+  pat_idx_long <- samps$samp_info$pat_idx_long
+  X <- samps$X
+  Z_kron <- samps$Z_kron
+  X_tmp <- as.matrix(samps$X_for)
+  Z_kron_for <- samps$Z_kron_for
+  pat_idx_for <- samps$pat_long_for
+  pat_idx_long_for <- rep(samps$pat_long_for, 2)
+
+  ## Calculate mean deviance
+  mean_dev <- lapply(1:ncol(samps$res_beta), function(x){
+    beta <- matrix(samps$res_beta[, x], ncol = N_outcomes)
+    sig_tmp <- matrix(samps$res_sigma[, x], ncol = N_outcomes)
+    pat_eff <- samps$res_pat_eff[,, x]
+    y_use <- samps$res_y[,, x]
+    cuts <- samps$res_cuts[, x]
+    ar_tmp <- samps$res_ar[x]
+
+    mean_vec_obs <- as.numeric(X %*% beta) + rowSums(Z_kron * pat_eff[pat_idx_long, ])
+    mean_mat_obs <- matrix(mean_vec_obs, ncol = 2)
+
+    mean_vec <- as.numeric(X_tmp %*% beta) + rowSums(Z_kron_for * pat_eff[pat_idx_long_for, ])
+    mean_mat <- matrix(mean_vec, ncol = 2)
+
+    ## storage for likelihood evaluations
+    N_pat <- length(unique(pat_idx))
+    y_last <- array(NA, c(N_pat, 2, 4))
+    for(i in 1:N_pat) {
+      ## Locations of vectors to sample
+      times <- X_tmp[pat_idx_for == i, 3]
+      locs <- samps$samp_info$pat_locs[[i]]
+      locs_for <- which(pat_idx_for == i)
+      length_locs <- length(locs)
+      max_loc <- max(locs_for) - 4
+      dist_mat <- ar_tmp ^ as.matrix(dist(times, diag = T, upper = T))
+
+      for(j in 1:4) {
+        full_sig <- kronecker(sig_tmp, dist_mat[c(1:length_locs, length_locs + j),
+                                                c(1:length_locs, length_locs + j)])
+        pre_calcs <- pre_calc_ar(full_sig, c(length_locs + 1, length_locs * 2 + 2))
+        mean_val <- mean_mat[max_loc + j, ] +
+          pre_calcs$mean_pre %*% (as.vector(y_use[locs, ]) - as.vector(mean_mat_obs[locs, ]))
+        y_last[i,,j] <- MASS::mvrnorm(1, mean_val, Sigma = pre_calcs$cond_cov)
+
+        ## Discretize
+        tmp_val <- y_last[i,1,j]
+        for(l in 1:(length(cuts) - 1)) {
+          if(tmp_val > cuts[l] & tmp_val <= cuts[l + 1]) {
+            y_last[i,1,j]  <- l
+          }
+        }
+
+      }
+    }
+
+    print(x)
+    list(y_last)
   })
 }
 
