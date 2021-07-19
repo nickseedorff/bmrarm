@@ -26,8 +26,7 @@ expansion_prior <- function(cor_mat, N_ordinal) {
 #' @param X design matrix
 #' @param prior_precision prior precision matrix
 #' @return matrix
-#' @importFrom LaplacesDemon rinvwishart
-#' @importFrom MBSP matrix.normal
+#' @importFrom LaplacesDemon rinvwishart rmatrixnorm
 #' @import dplyr
 #' @export
 
@@ -64,7 +63,7 @@ fc_sigma_theta_tilde <- function(y, X, prior_precision, y_orig, pat_idx = NULL,
   sig_draw <- rinvwishart(nrow(w_tmp) + N_outcome + 1, val)
 
   ## effects_draw
-  theta <- matrix.normal(M = theta_hat, V = sig_draw, U = x_inv)
+  theta <- rmatrixnorm(M = theta_hat, V = sig_draw, U = x_inv)
   list(sigma_tilde = sig_draw, theta_tilde = theta)
 }
 
