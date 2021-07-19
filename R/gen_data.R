@@ -63,7 +63,7 @@ gen_bmrvarx <- function(N = 600, seed = 10, N_param = 3) {
     full$y1 > cuts[4]  ~ 4
   )
 
-  cuts2 <- c(-Inf, 0, 2.5, Inf)
+  cuts2 <- c(-Inf, 0, 2.4, Inf)
   full$y_ord2 <- case_when(
     full$y2 <= cuts[2] ~ 1,
     full$y2 <= cuts[3] ~ 2,
