@@ -74,7 +74,8 @@ bmrvarx_da <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
 
     ## Store thresholds
     for(j in 1:N_ord) {
-      res_cuts[1:(N_cat[j] + 1), i, j] <- tmp_list$cuts[,,j] <- cuts_tilde[[j]]
+      res_cuts[1:(N_cat[j] + 1), i, j] <- tmp_list$cuts[1:(N_cat[j] + 1), , j] <-
+        cuts_tilde[[j]]
     }
 
     ## Iterations update, keep track of working parameter
