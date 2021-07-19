@@ -51,6 +51,7 @@ bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
   ## Get sampling info, initialize, generate storage
   samp_info <- get_sampling_info(env = environment())
   create_storage(env = environment())
+  covars[1, ] <- 0
 
   ## Run simulation
   for(i in 2:nsim) {
