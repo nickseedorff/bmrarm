@@ -15,8 +15,8 @@ gen_bmrvarx <- function(N = 600, seed = 10, N_param = 3) {
   colnames(cov_df) <- c("intercept", "x1")
 
   beta <- matrix(c(
-    0.15, -0.55, 0.2,
-    0.30, -0.15, 0.75),
+    0.15, -0.25, 0.2,
+    0.30, -0.05, 0.75),
     byrow = T, ncol = 3)
 
   ## Define parameters
