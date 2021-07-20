@@ -16,7 +16,8 @@ bmrvarx(
   seed = 14,
   verbose = TRUE,
   max_iter_rej = 500,
-  return_y = FALSE
+  return_y = FALSE,
+  fast = "FALSE"
 )
 }
 \arguments{

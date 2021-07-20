@@ -77,6 +77,92 @@ gen_bmrvarx <- function(N = 600, seed = 10, N_param = 3) {
        cuts2 = cuts2, X = cov_mat, sig0 = sigma * 2)
 }
 
+#' Generate data for time series simulation
+#'
+#' @param N Number of timepoints
+#' @param seed seed to set, default of 10
+#' @importFrom MASS mvrnorm
+#' @import dplyr
+
+gen_single <- function(N = 600, seed = 10, N_param = 3, first_obs = 101) {
+  set.seed(seed)
+
+  ## Additional effects
+  cont_covar <- rnorm(N)
+  cov_mat <- cbind(1, cont_covar)
+  cov_df <- as.data.frame(cov_mat)
+  colnames(cov_df) <- c("intercept", "x1")
+
+  beta <- matrix(c(
+    0.3, -0.55, 0.2,
+    0.4, -0.15, 0.75),
+    byrow = T, ncol = 3)
+
+  ## Define parameters
+  M <- matrix(c(0.5, 0.15, 0.45,
+                0.2, 0.45, 0.35,
+                0.15, 0.1, 0.6), ncol = 3, byrow = TRUE)
+  eigen(M)
+  sigma <- matrix(c(1, 0.15, 0.15,
+                    0.15, 1, 0.15,
+                    0.15, 0.15, 0.5), ncol = 3, byrow = T)
+
+  if(N_param == 2) {
+    M <- matrix(c(0.5, 0.40,
+                  0.25, 0.65), ncol = 2, byrow = TRUE)
+    eigen(M)
+    sigma <- sigma[c(1, 3), c(1, 3)]
+    beta <- beta[, c(1, 3)]
+  }
+
+  ## Subject and time indexing
+  df <- data.frame(obs_num = 0:(N - 1),
+                   pat_idx = 1)
+  y <- matrix(NA, nrow = N, ncol = N_param)
+
+  ## Generate continuous values
+  for(i in 1:N) {
+    if(df$obs_num[i] == 0) {
+      y[i, ] <- mvrnorm(1, mu = t(beta) %*% cov_mat[i, ],
+                        Sigma = sigma * 2)
+    } else {
+      y[i, ] <- mvrnorm(1, mu = t(beta) %*% cov_mat[i, ] +
+                          M %*% y[i - 1, ], Sigma = sigma)
+    }
+  }
+
+  ## Create ordinal values and binary values
+  full <- data.frame(df, y)
+  colnames(full)[3:ncol(full)] <- paste0("y", 1:N_param)
+  which_locs <- which((1:nrow(full)) >= first_obs)
+  full <- full[which_locs, ]
+
+  cuts <- c(-Inf, 0, 2.5, 4.75, Inf)
+  full$y_ord <- case_when(
+    full$y1 <= cuts[2] ~ 1,
+    full$y1 <= cuts[3] ~ 2,
+    full$y1 <= cuts[4] ~ 3,
+    full$y1 > cuts[4]  ~ 4
+  )
+
+  cuts2 <- c(-Inf, 0, 2.5, Inf)
+  full$y_ord2 <- case_when(
+    full$y2 <= cuts[2] ~ 1,
+    full$y2 <= cuts[3] ~ 2,
+    full$y2 > cuts[3] ~ 3
+  )
+
+  ## Check for resonable counts
+  table(full$y_ord)
+  full <- cbind(full, cov_df[which_locs, ])
+  full$y_ord[sample(1:nrow(full), size = 50)] <- NA
+  full$y2[sample(1:nrow(full), size = 50)] <- NA
+  full$y3[sample(1:nrow(full), size = 50)] <- NA
+
+  list(data = full, M = M, sigma = sigma, beta = beta, cuts = cuts,
+       cuts2 = cuts2, X = cov_mat[which_locs, ], sig0 = sigma * 2)
+}
+
 #' Generate data for longitudinal simulation
 #'
 #' @param N Mean time points per patient, drawn from a poisson

@@ -1,13 +1,18 @@
 library(devtools)
 load_all()
 
-sim_data <- gen_bmrvarx(N = 600, seed = 10, N_param = 3)
+sim_data2 <- gen_bmrvarx(N = 600, seed = 10, N_param = 3)
+sim_data <- gen_single(N = 600, seed = 10, N_param = 3)
+tail(sim_data$data)
 
-dat <- sim_data$data[101:600, ]
+dat <- sim_data$data
+rm(sim_data)
 formula = cbind(y2, y3, y_ord) ~ x1;
 data = dat;nsim = 500; burn_in = 100; seed = 1;
 ordinal_outcomes = c("y_ord");thin = 1;
 max_iter_rej = 10000000; sig_prior = 1000000;
+i <- 1
+
 y <- cbind(dat$y1, dat$y2, dat$y3)
 tmp_list$beta <- sim_data$beta
 tmp_list$M <- sim_data$M
@@ -16,8 +21,8 @@ tmp_list$cuts <- sim_data$cuts
 z <- dat$y_ord
 
 ## Single ordinal outcome
-bmrvarx(formula = cbind(y2, y3, y_ord) ~ x1,
-        data = sim_data$data, nsim = 500, burn_in = 100, seed = 1,
+f <- bmrvarx(formula = cbind(y2, y3, y_ord) ~ x1,
+        data = data, nsim = 500, burn_in = 100, seed = 1,
         ordinal_outcomes = c("y_ord"), thin = 1,
         max_iter_rej = 10000000)
 

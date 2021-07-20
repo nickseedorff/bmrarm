@@ -32,8 +32,10 @@ expansion_prior <- function(cor_mat, N_ordinal) {
 
 fc_sigma_theta_tilde <- function(y, X, prior_precision, y_orig) {
   N_outcome <- ncol(y)
-  w_tmp <- y[-1, ]
-  X_tilde <- cbind(X, rbind(rep(0, N_outcome), y_orig[-nrow(y), ]))[-1, ]
+  w_tmp <- y
+  X_tilde <- cbind(X, rbind(rep(0, N_outcome), y_orig[-nrow(y), ]))
+  #w_tmp <- y[-1, ]
+  #X_tilde <- cbind(X, rbind(rep(0, N_outcome), y_orig[-nrow(y), ]))[-1, ]
 
 
   ## Find theta hat
@@ -93,7 +95,7 @@ fc_cuts <- function(y, z, N_cat) {
 #' @return matrix
 #' @export
 
-fc_y_old <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter) {
+fc_y <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter, fast) {
 
   ## Current parameter values
   sig <- tmp_list$sigma
@@ -150,11 +152,19 @@ fc_y_old <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter) {
     }
 
     ## Store results
-    y[iter_locs, i] <- tmvn_gibbs_rej(
-      y_current = y[, i], mean = d_vec, lower = cuts_low,
-      upper = cuts_high, locs = iter_locs, loc_length = iter_length,
-      pre_calcs = pre_calcs, max_iter = samp_info$max_iter, N_ord = num_ord,
-      burn_in = samp_info$burn_in, num_iter = num_iter, num_obs = i)
+    if (fast) {
+      y[iter_locs, i] <- tmvn_gibbs_rej_fast(
+        y_current = y[, i], mean = d_vec, lower = cuts_low,
+        upper = cuts_high, locs = iter_locs, loc_length = iter_length,
+        pre_calcs = pre_calcs, max_iter = samp_info$max_iter, N_ord = num_ord,
+        burn_in = samp_info$burn_in, num_iter = num_iter, num_obs = i)
+    } else {
+      y[iter_locs, i] <- tmvn_gibbs_rej(
+        y_current = y[, i], mean = d_vec, lower = cuts_low,
+        upper = cuts_high, locs = iter_locs, loc_length = iter_length,
+        pre_calcs = pre_calcs, max_iter = samp_info$max_iter, N_ord = num_ord,
+        burn_in = samp_info$burn_in, num_iter = num_iter, num_obs = i)
+    }
     #rej_iters_vec[i] <- rej_samp_iters
   }
   #rej_iters_tmp <<- c(median(rej_iters_vec), max(rej_iters_vec))
@@ -175,7 +185,7 @@ fc_y_old <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter) {
 #' @return matrix
 #' @export
 
-fc_y <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter) {
+fc_y_old <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter) {
 
   ## Current parameter values
   N_ord <- samp_info$num_ord
@@ -267,6 +277,59 @@ fc_y <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter) {
 #' @importFrom MASS mvrnorm
 
 tmvn_gibbs_rej <- function(y_current, mean, lower, upper, locs, loc_length,
+                           pre_calcs, max_iter, N_ord, burn_in, num_iter, num_obs) {
+
+  ## Limit max iter the first 100 iterations
+  if(num_iter <= 100) max_iter <- 100
+
+  ## If missing a single ordinal outcome then sample from truncated normal
+  if(loc_length == 1) {
+    res <- rtruncnorm(
+      n = 1, a = lower[1], b = upper[1], sd = pre_calcs$cond_cov,
+      mean = cond_mean_part(y_current, mean, pre_calcs$mean_pre, 1))
+    rej_samp_iters <<- 0
+    ## Otherwise use a naive rejection sampling approach
+  } else {
+    res <- NA
+    iter <- 0
+    cond_mean <- cond_mean_part(y_current, mean, pre_calcs$mean_pre, locs)
+    while(is.na(res[1]) & iter <= max_iter) {
+      y_tmp <- pre_calcs$cond_chol_mat %*% rnorm(loc_length) + cond_mean
+      if(all(y_tmp >= lower & y_tmp <= upper)) {
+        res <- y_tmp
+      }
+      iter <- iter + 1
+    }
+
+    if(iter > max_iter) {
+      if(num_iter > burn_in) {
+        print(paste0("Num_obs to break is ", num_obs, "; iteration, ", num_iter, "\\n"))
+        stop("Sampling from the truncated multivariate normal was inefficient and could not be completed. Please increase max_iter.")
+      } else if (num_iter > 100) {
+        print(paste0("Num_obs to break is ", num_obs, "; iteration, ", num_iter, "\\n"))
+        warning("Sampling from the truncated multivariate normal could not be completed during burn-in.")
+      }
+      res <- y_tmp
+      res[1:N_ord] <- ifelse(is.infinite(upper[1:N_ord]), lower[1:N_ord], upper[1:N_ord])
+    }
+    rej_samp_iters <<- iter
+  }
+  res
+}
+
+#' Gibbs step for truncated multivariate normal
+#' @param y_current continous outcome values
+#' @param mean mean vector of multivariate normal
+#' @param sigma covariance matrix
+#' @param lower vector of lower thresholds
+#' @param upper vector of upper thresholds
+#' @param locs locations to sample
+#' @param pre_cals pre calculations, including the conditional variance
+#' @return vector
+#' @importFrom truncnorm rtruncnorm
+#' @importFrom MASS mvrnorm
+
+tmvn_gibbs_rej_fast <- function(y_current, mean, lower, upper, locs, loc_length,
                            pre_calcs, max_iter, N_ord, burn_in, num_iter, num_obs) {
 
   ## Limit max iter the first 100 iterations
