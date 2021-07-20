@@ -43,7 +43,9 @@ bmrvarx_da <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
   samp_info <- get_sampling_info(env = environment())
   create_storage(env = environment())
   tmp_list$cuts[3:4, , 1] <- tmp_list$cuts[3:4,,1] + 2.5
-  tmp_list$cuts[3:4, , 2] <- tmp_list$cuts[3:4, , 2] + 2.5
+  if(N_ord == 2) {
+    tmp_list$cuts[3:4, , 2] <- tmp_list$cuts[3:4, , 2] + 2.5
+  }
 
   ## Run simulationS
   for(i in 2:nsim) {
