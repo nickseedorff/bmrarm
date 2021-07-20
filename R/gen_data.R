@@ -155,9 +155,9 @@ gen_single <- function(N = 600, seed = 10, N_param = 3, first_obs = 101) {
   ## Check for resonable counts
   table(full$y_ord)
   full <- cbind(full, cov_df[which_locs, ])
-  full$y_ord[sample(1:nrow(full), size = 50)] <- NA
-  full$y2[sample(1:nrow(full), size = 50)] <- NA
-  full$y3[sample(1:nrow(full), size = 50)] <- NA
+  full$y_ord[sample(1:nrow(full), size = 25)] <- NA
+  full$y2[sample(1:nrow(full), size = 25)] <- NA
+  full$y3[sample(1:nrow(full), size = 25)] <- NA
 
   list(data = full, M = M, sigma = sigma, beta = beta, cuts = cuts,
        cuts2 = cuts2, X = cov_mat[which_locs, ], sig0 = sigma * 2)
