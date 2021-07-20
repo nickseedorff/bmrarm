@@ -4,7 +4,7 @@
 \alias{fc_sigma_theta_tilde}
 \title{Full conditional draws of the regression coefficients}
 \usage{
-fc_sigma_theta_tilde(y, X, prior_precision, y_orig)
+fc_sigma_theta_tilde(y, X, prior_precision, y_orig, old_prior_y0)
 }
 \arguments{
 \item{y}{matrix of multivariate observations}

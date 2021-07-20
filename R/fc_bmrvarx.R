@@ -30,12 +30,15 @@ expansion_prior <- function(cor_mat, N_ordinal) {
 #' @import dplyr
 #' @export
 
-fc_sigma_theta_tilde <- function(y, X, prior_precision, y_orig) {
+fc_sigma_theta_tilde <- function(y, X, prior_precision, y_orig, old_prior_y0) {
   N_outcome <- ncol(y)
   w_tmp <- y
   X_tilde <- cbind(X, rbind(rep(0, N_outcome), y_orig[-nrow(y), ]))
-  #w_tmp <- y[-1, ]
-  #X_tilde <- cbind(X, rbind(rep(0, N_outcome), y_orig[-nrow(y), ]))[-1, ]
+
+  if(old_prior_y0) {
+    w_tmp <- y[-1, ]
+    X_tilde <- cbind(X, rbind(rep(0, N_outcome), y_orig[-nrow(y), ]))[-1, ]
+  }
 
 
   ## Find theta hat
@@ -368,7 +371,7 @@ tmvn_gibbs_rej_fast <- function(y_current, mean, lower, upper, locs, loc_length,
       mean_vec <- as.vector(cond_mean_part(y_current, mean, pre_calcs$mean_pre, locs))
       res <- rtmvnorm(
         1, mean = mean_vec, H = pre_calcs$cond_chol_inv, lower = lower,
-        upper = upper, algorithm = "gibbs", burn.in.samples = 10, start.value = start_val)
+        upper = upper, algorithm = "gibbs", burn.in.samples = 20, start.value = start_val)
     }
   }
   res

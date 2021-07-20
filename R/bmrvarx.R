@@ -51,7 +51,6 @@ bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
   ## Get sampling info, initialize, generate storage
   samp_info <- get_sampling_info(env = environment())
   create_storage(env = environment())
-  #covars[1, ] <- 0
 
   ## Run simulation
   for(i in 2:nsim) {
@@ -63,6 +62,7 @@ bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
         y = t(y_use), z = y_ord, mean_mat = t(mean_mat), tmp_list = tmp_list,
         miss_mat = miss_mat, samp_info = samp_info, num_iter = i, fast = fast)
     } else {
+      covars[1, ] <- 0
       y_use <- res_y[,, i] <- fc_y_old(
         y = t(y_use), z = y_ord, mean_mat = t(mean_mat), tmp_list = tmp_list,
         miss_mat = miss_mat, samp_info = samp_info, num_iter = i, fast = fast)
@@ -74,7 +74,8 @@ bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
 
     ## Covariance matrix
     sig_theta <- fc_sigma_theta_tilde(y = w_use, X = covars, y_orig = y_use,
-                                      prior_precision = samp_info$prior_non_base)
+                                      prior_precision = samp_info$prior_non_base,
+                                      old_prior_y0)
     sigma_tilde <- sig_theta$sigma_tilde
 
     ## M and beta
