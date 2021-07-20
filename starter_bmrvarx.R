@@ -1,7 +1,7 @@
 library(devtools)
 load_all()
 
-sim_data2 <- gen_bmrvarx(N = 600, seed = 10, N_param = 3)
+#sim_data2 <- gen_bmrvarx(N = 600, seed = 10, N_param = 3)
 sim_data <- gen_single(N = 600, seed = 10, N_param = 3)
 tail(sim_data$data)
 
@@ -22,9 +22,22 @@ z <- dat$y_ord
 
 ## Single ordinal outcome
 f <- bmrvarx(formula = cbind(y2, y3, y_ord) ~ x1,
-        data = data, nsim = 500, burn_in = 100, seed = 1,
+        data = data, nsim = 1000, burn_in = 200, seed = 1,
         ordinal_outcomes = c("y_ord"), thin = 1,
         max_iter_rej = 10000000)
+
+
+f2 <- bmrvarx(formula = cbind(y2, y3, y_ord) ~ x1,
+             data = data, nsim = 1000, burn_in = 200, seed = 1,
+             ordinal_outcomes = c("y_ord"), thin = 1,
+             max_iter_rej = 10000000, fast = T)
+
+rowMeans(f$draws$res_cuts)
+rowMeans(f2$draws$res_cuts)
+
+rowMeans(f$draws$res_beta)
+rowMeans(f2$draws$res_beta)
+
 
 ## Ordinal outcome and binary outcome
 bmrvarx(formula = cbind(y_ord2, y3, y_ord) ~ x1,

@@ -185,7 +185,7 @@ fc_y <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter, fast) 
 #' @return matrix
 #' @export
 
-fc_y_old <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter) {
+fc_y_old <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter, fast) {
 
   ## Current parameter values
   N_ord <- samp_info$num_ord
@@ -255,11 +255,20 @@ fc_y_old <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter) {
       pre_calcs <- default_mats[[iter_samp_type]]
     }
 
-    y[iter_locs, i] <- tmvn_gibbs_rej(
-      y_current = y[, i], mean = d_vec, lower = cuts_low,
-      upper = cuts_high, locs = iter_locs, loc_length = iter_length,
-      pre_calcs = pre_calcs, max_iter = samp_info$max_iter, N_ord = num_ord,
-      burn_in = samp_info$burn_in, num_iter = num_iter, num_obs = i)
+    ## Store results
+    if (fast) {
+      y[iter_locs, i] <- tmvn_gibbs_rej_fast(
+        y_current = y[, i], mean = d_vec, lower = cuts_low,
+        upper = cuts_high, locs = iter_locs, loc_length = iter_length,
+        pre_calcs = pre_calcs, max_iter = samp_info$max_iter, N_ord = num_ord,
+        burn_in = samp_info$burn_in, num_iter = num_iter, num_obs = i)
+    } else {
+      y[iter_locs, i] <- tmvn_gibbs_rej(
+        y_current = y[, i], mean = d_vec, lower = cuts_low,
+        upper = cuts_high, locs = iter_locs, loc_length = iter_length,
+        pre_calcs = pre_calcs, max_iter = samp_info$max_iter, N_ord = num_ord,
+        burn_in = samp_info$burn_in, num_iter = num_iter, num_obs = i)
+    }
   }
   t(y)
 }

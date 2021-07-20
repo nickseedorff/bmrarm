@@ -17,7 +17,8 @@ bmrvarx(
   verbose = TRUE,
   max_iter_rej = 500,
   return_y = FALSE,
-  fast = "FALSE"
+  fast = F,
+  old_prior_y0 = F
 )
 }
 \arguments{

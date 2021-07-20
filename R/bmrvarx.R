@@ -21,7 +21,7 @@
 bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
                     sig_prior = 1000000, all_draws = FALSE, nsim = 1000,
                     burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
-                    max_iter_rej = 500, return_y = FALSE, fast = "FALSE") {
+                    max_iter_rej = 500, return_y = FALSE, fast = F, old_prior_y0 = F) {
 
   ## Extract outcome variables, record missing values
   out_vars <- setdiff(all.vars(formula),
@@ -58,10 +58,15 @@ bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
     mean_mat <- covars %*% tmp_list$beta
 
     ## Draw latent variables
-
-    y_use <- res_y[,, i] <- fc_y(
-      y = t(y_use), z = y_ord, mean_mat = t(mean_mat), tmp_list = tmp_list,
-      miss_mat = miss_mat, samp_info = samp_info, num_iter = i, fast = fast)
+    if(!old_prior_y0) {
+      y_use <- res_y[,, i] <- fc_y(
+        y = t(y_use), z = y_ord, mean_mat = t(mean_mat), tmp_list = tmp_list,
+        miss_mat = miss_mat, samp_info = samp_info, num_iter = i, fast = fast)
+    } else {
+      y_use <- res_y[,, i] <- fc_y_old(
+        y = t(y_use), z = y_ord, mean_mat = t(mean_mat), tmp_list = tmp_list,
+        miss_mat = miss_mat, samp_info = samp_info, num_iter = i, fast = fast)
+    }
 
     ## Draw expansion parameters from prior and transform data
     D_prior <- expansion_prior(cor_mat, N_ordinal = N_ord)
