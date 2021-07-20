@@ -32,6 +32,18 @@ f2 <- bmrvarx(formula = cbind(y2, y3, y_ord) ~ x1,
              ordinal_outcomes = c("y_ord"), thin = 1,
              max_iter_rej = 10000000, fast = T)
 
+
+f2 <- bvar(formula = cbind(y1, y2, y3) ~ x1,
+              data = filter(data, !is.na(y2), !is.na(y3)), nsim = 10000,
+              burn_in = 2000, seed = 1, thin = 1)
+
+rowMeans(f2$draws$res_M)
+rowMeans(f2$draws$res_beta)
+rowMeans(f2$draws$res_sigma)
+
+
+rowMeans(f2$draws$res_sigma)
+
 rowMeans(f$draws$res_cuts)
 rowMeans(f2$draws$res_cuts)
 

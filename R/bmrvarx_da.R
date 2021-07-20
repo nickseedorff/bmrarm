@@ -12,7 +12,7 @@
 bmrvarx_da <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
                       sig_prior = 1000000, all_draws = FALSE, nsim = 1000,
                       burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
-                      max_iter_rej = 500, return_y = FALSE) {
+                      max_iter_rej = 500, return_y = FALSE, fast = F, old_prior_y0 = F) {
 
   ## Extract outcome variables, record missing values
   out_vars <- setdiff(all.vars(formula),
@@ -45,18 +45,19 @@ bmrvarx_da <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
   tmp_list$cuts[3:4, , 1] <- tmp_list$cuts[3:4,,1] + 2.5
   tmp_list$cuts[3:4, , 2] <- tmp_list$cuts[3:4, , 2] + 2.5
 
-  ## Run simulation
+  ## Run simulationS
   for(i in 2:nsim) {
     mean_mat <- covars %*% tmp_list$beta
 
     ## Draw latent variables
     y_use <- res_y[,, i] <- fc_y(
       y = t(y_use), z = y_ord, mean_mat = t(mean_mat), tmp_list = tmp_list,
-      miss_mat = miss_mat, samp_info = samp_info, num_iter = i)
+      miss_mat = miss_mat, samp_info = samp_info, num_iter = i, fast = fast)
 
     ## Sigma and effects
     sig_theta <- fc_sigma_theta_tilde(y = y_use, X = covars, y_orig = y_use,
-                                      prior_precision = samp_info$prior_non_base)
+                                      prior_precision = samp_info$prior_non_base,
+                                      old_prior_y0)
     sigma_tilde <- sig_theta$sigma_tilde
 
     ## M and beta

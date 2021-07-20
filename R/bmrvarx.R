@@ -142,3 +142,97 @@ bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
 
   lst
 }
+
+#' PX-DA MCMC routine to sample from BMRVAR model
+#'
+#' @param formula an object of class "formula"; a symbolic description of the model to be fitted
+#' @param data a dataframe containing outcome variables, covariates, and a patient or subject identifier
+#' @param ordinal_outcomes a character string containing the names of the ordinal outcomes
+#' @param patient_var name of the patient or subject identifier
+#' @param sig_prior prior variance on the regression coefficients
+#' @param all_draws logical with a default of FALSE which discards burn-in
+#' @param nsim positive integer, number of iterations with default of 1000
+#' @param burn_in positive integer, number of iterations to remove with default of 100. Must be >= 100.
+#' @param thin positive integer, specifiers the period of saving samples. Default of 20 due to the high autocorrelation of the cutpoints
+#' @param seed positive integer, seed for random number generation
+#' @param verbose logical, print iteration number to keep track of progress
+#' @param max_iter_rej maximum number of rejection algorithm attempts for multivariate truncated normal
+#' @return mcmc
+#' @importFrom zoo na.approx
+#' @importFrom fastDummies dummy_cols
+#' @export
+
+
+bvar <- function(formula, data, sig_prior = 1000000, all_draws = FALSE,
+                 nsim = 1000, burn_in = 100, thin = 10, seed = 14,
+                 verbose = TRUE) {
+
+  ## Extract outcome variables, record missing values
+  out_vars <- setdiff(all.vars(formula),
+                      attr(terms(formula), which = "term.labels"))
+  dat_out <- data[, out_vars]
+  miss_mat <- matrix(as.numeric(is.na(dat_out)), ncol = length(out_vars))
+
+  ## Set seed and get constants
+  set.seed(seed)
+  N_response <- ncol(dat_out)
+  N_obs <- nrow(dat_out)
+  covars <- model.matrix(as.formula(formula), data = data)
+  N_covars <- ncol(covars)
+  pat_idx <- rep(1, N_obs)
+  N_cat <- 4
+  N_ord <- 0
+  N_cont <- N_response - N_ord
+  covars <- model.matrix(as.formula(formula), data = data)
+  N_covars <- ncol(covars)
+  N_base_covars <- 0
+  max_iter_rej <- 0
+
+  ## Get sampling info, initialize, generate storage
+  samp_info <- get_sampling_info(env = environment())
+  create_storage(env = environment())
+
+  ## Run simulation
+  for(i in 2:nsim) {
+
+    ## Covariance matrix
+    sig_theta <- fc_sigma_theta_tilde(y = y_use, X = covars, y_orig = y_use,
+                                      prior_precision = samp_info$prior_non_base,
+                                      old_prior_y0 = T)
+    sigma_tilde <- sig_theta$sigma_tilde
+
+    ## M and beta
+    beta_tilde <- sig_theta$theta_tilde[1:N_covars, ]
+    M_tilde <- t(sig_theta$theta_tilde[(N_covars + 1):(N_covars + N_response), ])
+
+    ## Store updated values
+    res_M[, i] <- tmp_list$M <- M_tilde
+    res_sigma[, i] <- tmp_list$sigma <- sigma_tilde
+    res_beta[, i] <- tmp_list$beta <- beta_tilde
+
+    ## Iterations update, keep track of working parameter
+    if(i %% 50 == 0) print(paste0("iteration = ", i, ";"))
+  }
+
+
+  sim_use <- seq(burn_in + 1, nsim, by = thin)
+  all <- list(res_M = res_M,
+              res_sigma = res_sigma,
+              res_beta = res_beta)
+
+  draws <- list(res_M = res_M[, sim_use],
+                res_sigma = res_sigma[, sim_use],
+                res_beta = res_beta[, sim_use])
+
+
+  if(all_draws) {
+    lst <- list(all = all, draws = draws,
+                covars_used = colnames(covars))
+  } else {
+    lst <- list(draws = draws,
+                covars_used = colnames(covars))
+  }
+
+  lst
+}
+

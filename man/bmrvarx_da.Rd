@@ -16,7 +16,9 @@ bmrvarx_da(
   seed = 14,
   verbose = TRUE,
   max_iter_rej = 500,
-  return_y = FALSE
+  return_y = FALSE,
+  fast = F,
+  old_prior_y0 = F
 )
 }
 \arguments{
