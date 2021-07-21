@@ -155,12 +155,14 @@ gen_single <- function(N = 600, seed = 10, N_param = 3, first_obs = 101) {
   ## Check for resonable counts
   table(full$y_ord)
   full <- cbind(full, cov_df[which_locs, ])
+  full_no_miss <- full
   full$y_ord[sample(4:nrow(full), size = 25)] <- NA
   full$y2[sample(4:nrow(full), size = 25)] <- NA
   full$y3[sample(4:nrow(full), size = 25)] <- NA
 
   list(data = full, M = M, sigma = sigma, beta = beta, cuts = cuts,
-       cuts2 = cuts2, X = cov_mat[which_locs, ], sig0 = sigma * 2)
+       cuts2 = cuts2, X = cov_mat[which_locs, ], sig0 = sigma * 2,
+       data_no_miss = full_no_miss)
 }
 
 #' Generate data for longitudinal simulation
