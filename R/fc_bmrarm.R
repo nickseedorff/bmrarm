@@ -120,7 +120,7 @@ bmrarm_fc_y_cuts <- function(y, z, X, Z_kron, cur_draws, samp_info) {
       ind <- samp_info$pat_time_ind[i]
 
       ## Sample from multivariate truncated normal
-      start_val <- pmax(pmin(cond_mean[locs], cuts_high[locs]), cuts_low[locs])
+      start_val <- pmax(pmin(y[locs, 1], cuts_high[locs]), cuts_low[locs])
       y[locs, 1] <- rtmvnorm(
         1, mean = cond_mean[locs], H = sig_list$cond_cov_inv_list[[ind]],
         lower = cuts_low[locs], upper = cuts_high[locs], algorithm = "gibbs",

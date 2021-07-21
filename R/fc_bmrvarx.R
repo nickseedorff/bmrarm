@@ -371,7 +371,7 @@ tmvn_gibbs_rej_fast <- function(y_current, mean, lower, upper, locs, loc_length,
       mean_vec <- as.vector(cond_mean_part(y_current, mean, pre_calcs$mean_pre, locs))
       res <- rtmvnorm(
         1, mean = mean_vec, H = pre_calcs$cond_chol_inv, lower = lower,
-        upper = upper, algorithm = "gibbs", burn.in.samples = 20, start.value = start_val)
+        upper = upper, algorithm = "gibbs", burn.in.samples = 10, start.value = start_val)
     }
   }
   res
