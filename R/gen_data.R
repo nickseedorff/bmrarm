@@ -94,18 +94,18 @@ gen_single <- function(N = 600, seed = 10, N_param = 3, first_obs = 101) {
   colnames(cov_df) <- c("intercept", "x1")
 
   beta <- matrix(c(
-    0.3, -0.55, 0.2,
+    0.3, -0.1, 0.2,
     0.4, -0.15, 0.75),
     byrow = T, ncol = 3)
 
   ## Define parameters
-  M <- matrix(c(0.5, 0.15, 0.45,
-                0.2, 0.45, 0.35,
-                0.15, 0.1, 0.6), ncol = 3, byrow = TRUE)
+  M <- matrix(c(0.4, 0.15, 0.35,
+                0.2, 0.35, 0.25,
+                0.12, 0.1, 0.5), ncol = 3, byrow = TRUE)
   eigen(M)
-  sigma <- matrix(c(1, 0.15, 0.15,
-                    0.15, 1, 0.15,
-                    0.15, 0.15, 0.5), ncol = 3, byrow = T)
+  sigma <- matrix(c(1, 0.12, 0.12,
+                    0.12, 1, 0.12,
+                    0.12, 0.12, 0.5), ncol = 3, byrow = T)
 
   if(N_param == 2) {
     M <- matrix(c(0.5, 0.40,
@@ -137,7 +137,7 @@ gen_single <- function(N = 600, seed = 10, N_param = 3, first_obs = 101) {
   which_locs <- which((1:nrow(full)) >= first_obs)
   full <- full[which_locs, ]
 
-  cuts <- c(-Inf, 0, 2.5, 4.75, Inf)
+  cuts <- c(-Inf, 0, 1.3, 2.2, Inf)
   full$y_ord <- case_when(
     full$y1 <= cuts[2] ~ 1,
     full$y1 <= cuts[3] ~ 2,
@@ -145,12 +145,15 @@ gen_single <- function(N = 600, seed = 10, N_param = 3, first_obs = 101) {
     full$y1 > cuts[4]  ~ 4
   )
 
-  cuts2 <- c(-Inf, 0, 2.4, Inf)
+  cuts2 <- c(-Inf, 0, 1.2, Inf)
   full$y_ord2 <- case_when(
     full$y2 <= cuts[2] ~ 1,
     full$y2 <= cuts[3] ~ 2,
     full$y2 > cuts[3] ~ 3
   )
+
+  table(full$y_ord[1:500])
+  table(full$y_ord2[1:500])
 
   ## Check for resonable counts
   table(full$y_ord)
