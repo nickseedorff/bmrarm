@@ -147,9 +147,9 @@ gen_single <- function(N = 600, seed = 10, N_param = 3, first_obs = 101) {
 
   cuts2 <- c(-Inf, 0, 1.2, Inf)
   full$y_ord2 <- case_when(
-    full$y2 <= cuts[2] ~ 1,
-    full$y2 <= cuts[3] ~ 2,
-    full$y2 > cuts[3] ~ 3
+    full$y2 <= cuts2[2] ~ 1,
+    full$y2 <= cuts2[3] ~ 2,
+    full$y2 > cuts2[3] ~ 3
   )
 
   table(full$y_ord[1:500])
@@ -160,7 +160,7 @@ gen_single <- function(N = 600, seed = 10, N_param = 3, first_obs = 101) {
   full <- cbind(full, cov_df[which_locs, ])
   full_no_miss <- full
   full$y_ord[sample(1:500, size = 25)] <- NA
-  full$y2[sample(1:500, size = 25)] <- NA
+  full$y_ord2[sample(1:500, size = 25)] <- NA
   full$y3[sample(1:500, size = 25)] <- NA
 
   list(data = full, M = M, sigma = sigma, beta = beta, cuts = cuts,

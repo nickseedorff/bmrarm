@@ -7,9 +7,9 @@ tail(sim_data$data)
 
 dat <- sim_data$data
 rm(sim_data)
-formula = cbind(y2, y3, y_ord) ~ x1;
+formula = cbind(y3, y_ord, y_ord2) ~ x1;
 data = dat;nsim = 500; burn_in = 100; seed = 1;
-ordinal_outcomes = c("y_ord");thin = 1;
+ordinal_outcomes = c("y_ord", "y_ord2");thin = 1;
 max_iter_rej = 10000000; sig_prior = 1000000;
 i <- 1
 
@@ -21,11 +21,19 @@ tmp_list$cuts <- sim_data$cuts
 z <- dat$y_ord
 
 ## Single ordinal outcome
-f <- bmrvarx(formula = cbind(y2, y3, y_ord) ~ x1,
-        data = data, nsim = 1000, burn_in = 200, seed = 1,
-        ordinal_outcomes = c("y_ord"), thin = 1,
-        max_iter_rej = 10000000)
+f <- bmrvarx(formula = cbind(y3, y_ord, y_ord2) ~ x1,
+        data = sim_data$data, nsim = 400, burn_in = 200, seed = 1,
+        ordinal_outcomes = c("y_ord", "y_ord2"), thin = 1,
+        max_iter_rej = 10000000, fast = T)
 
+plot(f$draws$res_cuts[3,, 1])
+plot(f$draws$res_cuts[3,, 2])
+
+
+f2 <- bmrvarx_da(formula = cbind(y3, y_ord, y_ord2) ~ x1,
+             data = data, nsim = 500, burn_in = 200, seed = 1,
+             ordinal_outcomes = c("y_ord", "y_ord2"), thin = 1,
+             max_iter_rej = 10000000, fast = T)
 
 f2 <- bmrvarx(formula = cbind(y2, y3, y_ord) ~ x1,
              data = data, nsim = 1000, burn_in = 200, seed = 1,
