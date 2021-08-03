@@ -1,0 +1,69 @@
+i <- as.numeric(commandArgs(TRUE))
+
+#require(devtools)
+#install.packages("nlme")
+remotes::install_github("nickseedorff/brmarm")
+library(bmrarm)
+library(dplyr)
+
+burn <- 5000
+sims <- 25000
+options(warn = 2)
+
+res <- as.data.frame(matrix(NA, ncol = 8, nrow = 3))
+colnames(res) <- c("data", "model", "time", "cDIC", "cPd", "mDIC", "mPD", "rho")
+res[, 2] <- rep(c("int", "slope", "ar"), 1)
+
+################################################################################
+# Models with AR data
+################################################################################
+data <- read.csv("./leish_modeling_data.csv") %>%
+  mutate(true_log_sla = log_sla, true_leish = leish_model,
+         pat_idx = dense_rank(as.factor(ID)),
+         age_ind = as.numeric(age_model == "3-11 years old"),
+         hunt_M = as.numeric(Hunt == "M"),
+         hunt_W = as.numeric(Hunt == "W"),
+         treatment = as.numeric(treatment_group == "Yellow")) %>%
+  filter(!is.na(log_sla) | !is.na(leish_model)) %>%
+  as.data.frame()
+data$log_dpp <- log(data$DPP_Enroll)
+
+# DIC for each modeling type ----------------------------------------------
+start_time <- Sys.time()
+samps <- baseline_bmr(formula = cbind(leish_model, log_sla) ~ treatment + time + age_ind + log_dpp + hunt_M + hunt_W,
+                      data = data, ordinal_outcome = "leish_model", patient_var = "pat_idx",
+                      random_slope = F, time_var = "time", ar_cov = F,
+                      burn_in = 2000, nsim = 10000, thin = 2, seed = i,
+                      sd_vec = c(0.35, 0.15, 0.35, 0.1, 0.18, 0.1))
+fname <- paste0("./samples//leish_data_int_model_siw_small_final" , i,".RDS")
+res[1, 3:7] <- c(Sys.time() - start_time, bmrarm:::get_DIC(samps)[c(1, 3)],
+                 bmrarm:::get_DIC_ar(samps, marginal = T)[c(1, 3)])
+saveRDS(list(samps = samps, data = data), fname)
+
+start_time <- Sys.time()
+samps <- baseline_bmr(formula = cbind(leish_model, log_sla) ~ treatment + time + age_ind + log_dpp + hunt_M + hunt_W,
+                      data = data, ordinal_outcome = "leish_model", patient_var = "pat_idx",
+                      random_slope = T, time_var = "time", ar_cov = F,
+                      burn_in = 2000, nsim = 10000, thin = 2, seed = i,
+                      sd_vec = c(0.35, 0.15, 0.35, 0.1, 0.18, 0.1))
+fname <- paste0("./samples//leish_data_slope_model_siw_small_final" , i,".RDS")
+res[2, 3:7] <- c(Sys.time() - start_time, bmrarm:::get_DIC(samps)[c(1, 3)],
+                 bmrarm:::get_DIC_ar(samps, marginal = T)[c(1, 3)])
+saveRDS(list(samps = samps, data = data), fname)
+
+start_time <- Sys.time()
+samps <- baseline_bmr(formula = cbind(leish_model, log_sla) ~ treatment + time + age_ind + log_dpp + hunt_M + hunt_W,
+                      data = data, ordinal_outcome = "leish_model", patient_var = "pat_idx",
+                      random_slope = T, time_var = "time", ar_cov = T,
+                      burn_in = burn, nsim = sims, thin = 5, seed = i,
+                      sd_vec = c(0.35, 0.15, 0.35, 0.1, 0.18, 0.1))
+fname <- paste0("./samples//leish_data_ar_model_siw_small_final" , i,".RDS")
+res[3, 3:7] <- c(Sys.time() - start_time, bmrarm:::get_DIC(samps)[c(1, 3)],
+                 bmrarm:::get_DIC_ar(samps, marginal = T)[c(1, 3)])
+saveRDS(list(samps = samps, data = data), fname)
+res[1, 8] <- mean(samps$res_ar)
+res[2, 8] <- sd(samps$res_ar)
+res[3, 8] <- median(samps$res_ar)
+
+f_out <- paste0("./chapter3_sims//select_leish_siw_small_final", i, ".csv")
+write.csv(res, f_out, row.names = FALSE)

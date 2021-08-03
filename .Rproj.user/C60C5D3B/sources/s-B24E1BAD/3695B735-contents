@@ -1,0 +1,58 @@
+## Get data
+crimes <- read.csv(paste0("https://archive.ics.uci.edu/ml/machine-learning-",
+                          "databases/00211/CommViolPredUnnormalizedData.txt"),
+                   header = F)
+## Add column names
+crimes_descr <- readLines(paste0("http://archive.ics.uci.edu/ml/datasets/",
+                                 "Communities+and+Crime+Unnormalized"))
+crimes_descr <- strsplit(crimes_descr[grepl(pattern = "<br>@attribute",
+                                            x = crimes_descr)], split = " ")
+colnames(crimes) <- vapply(crimes_descr, FUN = function(rw) {rw[[2]]},
+                           FUN.VALUE = "STRING")
+## Replace "?" with NA
+crimes[crimes == "?"] <- NA
+crimes <- crimes[, colSums(is.na(crimes)) == 0]
+## Select a subset of predictors, Convert all columns to numeric, add outcome
+col_start <- which(names(crimes) == "pop")
+end_start <- which(names(crimes) == "pctOfficDrugUnit")
+X <- as.data.frame(sapply(crimes[, col_start:end_start], as.numeric))
+outcome <- crimes$murdPerPop
+## Train the model
+set.seed(2021)
+rf_mod <- randomForest(X, outcome)
+library(randomForest)
+library(totalvis)
+plot(totalvis(rf_mod, X, pin = "pctKids2Par"))
+plot(totalvis(rf_mod, X, feature = "pctKids2Par", pc_num = NULL))
+
+
+rf_mod2 <- randomForest(X[, 44, drop = FALSE], outcome)
+
+
+par(mar=c(5.1, 4.1, 0.5, 0.1), mfrow=c(1, 3), cex = 0.9)
+plot(totalvis(rf_mod, X, pin = "pctKids2Par"), main = "")
+plot(totalvis(rf_mod, X, feature = "pctKids2Par", pc_num = NULL), main = "")
+plot(totalvis(rf_mod2, X[, 44, drop = FALSE], feature = "pctKids2Par"), main = "")
+
+X_pk2p <- X[, which(colnames(X) == "pctKids2Par"), drop = FALSE]
+rf_marg <- randomForest(X_pk2p, outcome)
+plot(totalvis(rf_marg, X_pk2p, feature = "pctKids2Par"))
+
+
+# Correlated feature with no effect ---------------------------------------
+library(caret)
+library(e1071)
+set.seed(2021)
+X <- mvrnorm(n = 1000, mu = c(2, 2),
+             Sigma = matrix(c(1, 0.8, 0.8, 1), nrow = 2))
+colnames(X) <- c("X1", "X2")
+y = as.factor((X[, 1] + rnorm(1000, 0, 0.1)) > 1.5)
+## Train model, plot pdp_pca
+mod <- train(X, y , method = "nnet", trace = FALSE)
+plot(totalvis(mod, X, pin = "X2", type = "classification"))
+diag_obj <- partial_effects(mod, X, type = "classification")
+plot(diag_obj, differenced = T, legend_loc = "right")
+
+mod2 <- train(X[, 2, drop = FALSE], y , method = "nnet", trace = FALSE)
+plot(totalvis(mod2, X[, 2, drop = FALSE], feature = "X2", type = "classification"))
+

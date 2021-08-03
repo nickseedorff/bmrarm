@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1625004536477.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1743729184",
+    "id" : "1F075DB3",
+    "lastKnownWriteTime" : 1625065418,
+    "last_content_update" : 1625065418201,
+    "path" : "C:/Users/nicho/Dropbox/_Thesis/bmrvar/run_apps_sims/chapter3_sims_ar.R",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "27,9",
+        "scrollLine" : "0"
+    },
+    "relative_order" : 8,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

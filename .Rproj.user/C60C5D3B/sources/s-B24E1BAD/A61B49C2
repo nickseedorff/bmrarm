@@ -1,0 +1,26 @@
+{
+    "id": "A61B49C2",
+    "path": "C:/Users/Nick/Dropbox/_Thesis/bmrvar/packages/bmrarm/R/get_preds.R",
+    "project_path": "R/get_preds.R",
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1628026596305.0,
+    "source_on_save": false,
+    "relative_order": 8,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "52,0",
+        "scrollLine": "0"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1626887989,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1626887989,
+    "read_only": false,
+    "read_only_alternatives": []
+}

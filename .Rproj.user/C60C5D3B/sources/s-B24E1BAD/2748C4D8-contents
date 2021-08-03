@@ -1,0 +1,2781 @@
+#' PX-DA MCMC routine to sample from HBMRVAR model
+#'
+#' @param formula an object of class "formula"; a symbolic description of the model to be fitted
+#' @param data a dataframe containing outcome variables, covariates, and a patient or subject identifier
+#' @param ordinal_outcomes a character string containing the names of the ordinal outcomes
+#' @param patient_var name of the patient or subject identifier
+#' @param sig_prior prior variance on the regression coefficients
+#' @param all_draws logical with a default of FALSE which discards burn-in
+#' @param nsim positive integer, number of iterations with default of 1000
+#' @param burn_in positive integer, number of iterations to remove with default of 100. Must be >= 100.
+#' @param thin positive integer, specifiers the period of saving samples. Default of 20 due to the high autocorrelation of the cutpoints
+#' @param seed positive integer, seed for random number generation
+#' @param verbose logical, print iteration number to keep track of progress
+#' @param max_iter_rej maximum number of rejection algorithm attempts for multivariate truncated normal
+#' @return mcmc
+#' @importFrom zoo na.approx
+#' @importFrom fastDummies dummy_cols
+#' @importFrom magic adiag
+#' @importFrom lme4 lmer VarCorr
+#' @export
+
+baseline_bmr2 <- function(formula, data, ordinal_outcome = c("y_ord"),
+                          time_var = "time", patient_var = "patient_idx",
+                          random_slope = F, ar_cov = TRUE, nsim = 1000,
+                          burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
+                          sig_prior = 1000000000, sd_vec = c(0.15, 0.30)) {
+
+  ## Create storage
+  set.seed(seed)
+  bmrarm_start(env = environment())
+  cont_out_var <- setdiff(out_vars, ordinal_outcome)
+
+  ## Starting values for ordinal outcome
+  y[1:N_obs, 1] <- 0.5 + res_cuts[z, 1]
+  y[is.infinite(y[, 1]), 1] <- -0.5
+  y[is.na(y[, 1]), 1] <- 0
+
+  ## Starting values for continuous outcomes
+  df <- data.frame(patient = samp_info$pat_idx_long, y = as.numeric(y),
+                   outcome = rep(1:N_outcomes, each = N_obs)) %>%
+    group_by(patient, outcome) %>%
+    mutate(y_interp = na.approx(y, na.rm = FALSE),
+           y_interp = ifelse(!is.na(y_interp), y_interp,
+                             ifelse(row_number() == n(),
+                                    lag(y_interp), lead(y_interp))))
+  y <- matrix(df$y_interp, ncol = N_outcomes)
+  y[is.na(y)] <- 0
+  i <- 2
+  samp_info$burn_in <- burn_in
+  samp_info$max_iter <- 10000000
+
+  ## Emprical bayes priors for the random effects covariance matrix
+  if(random_slope) {
+    form_string <- paste0("~ . + (", time_var, "|", patient_var, ")")
+  } else {
+    form_string <- paste0("~ . + (1|", patient_var, ")")
+  }
+  form_use <- update(formula, as.formula(form_string))
+
+  ## Fit models
+  ord_form <- reformulate(deparse(form_use[[3]]), response = ordinal_outcome)
+  cont_form <- reformulate(deparse(form_use[[3]]), response = cont_out_var)
+  ord_mod <- lmer(ord_form, data = data)
+  cont_mod <- lmer(cont_form, data = data)
+
+  ## Prior for
+  priors <- c(as.data.frame(VarCorr(ord_mod))[1:N_pat_effects, "vcov"],
+              as.data.frame(VarCorr(cont_mod))[1:N_pat_effects, "vcov"])
+  prior_mat <- diag(priors) * N_pat_effects
+
+  for(i in 2:nsim) {
+    samp_info$num_iter <- i
+
+    ## Regression coefficients
+    vals <- bmrarm_fc_sig_beta(y, X, Z_kron, cur_draws, samp_info)
+    #print("sb")
+    res_beta[, i] <- cur_draws$beta <- vals$beta
+    res_sig[, i] <- cur_draws$sigma <- vals$sig
+
+    # Autoregressive parameter
+    if(samp_info$ar_cov) {
+      vals <- bmrarm_mh_ar(y, X, Z_kron, cur_draws, samp_info)
+      #print("ar")
+      res_ar[i] <- cur_draws$ar <- vals$ar
+      res_accept[i, 2] <- vals$accept
+    }
+
+    ## Subject specific effects
+    vals <- bmrarm_fc_patient2(y, z, X, cur_draws, samp_info, prior_mat)
+    res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
+    res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
+    #res_pat_sig_sd[, i] <- cur_draws$pat_sig_sd <- vals$pat_sig_sd
+    #print(head(cur_draws$pat_effects))
+
+    ## Latent values, missing values, cut points
+    y_cuts <- bmrarm_fc_y_cuts(y, z, X, Z_kron, cur_draws, samp_info)
+    #print("y")
+    y <-  res_y[,, i] <- y_cuts$y
+    res_cuts[, i] <- cur_draws$cuts <- y_cuts$cuts
+    res_accept[i, 1] <- y_cuts$accept
+
+    ## Update missing values
+    y <- res_y[,, i]<- bmrarm_fc_missing(y, z, X, Z_kron, cur_draws, samp_info)
+    #print("miss")
+
+    ## Cut points
+    #if(i %% 50 == 0) print(i)
+    #if(i %% 100 == 50) plot(res_cuts[4, ], type = "l")
+    if(i %% 100 == 50) plot(res_ar, type = "l")
+    if(i %% 100 == 0) plot(res_pat_sig[1, ], type = "l")
+  }
+
+  sim_use <- seq(burn_in + 1, nsim, by = thin)
+  draws <- list(
+    res_cuts = res_cuts[, sim_use],
+    res_beta = res_beta[, sim_use],
+    res_pat_sig = res_pat_sig[, sim_use],
+    res_ar = res_ar[sim_use],
+    res_sigma = res_sig[, sim_use],
+    res_y = res_y[,, sim_use],
+    res_pat_eff = res_pat_eff[,, sim_use],
+    res_accept = res_accept[sim_use, ],
+    samp_info = samp_info,
+    X = X,
+    Z_kron = Z_kron, z = z)
+  draws
+}
+
+
+#' PX-DA MCMC routine to sample from HBMRVAR model
+#'
+#' @param formula an object of class "formula"; a symbolic description of the model to be fitted
+#' @param data a dataframe containing outcome variables, covariates, and a patient or subject identifier
+#' @param ordinal_outcomes a character string containing the names of the ordinal outcomes
+#' @param patient_var name of the patient or subject identifier
+#' @param sig_prior prior variance on the regression coefficients
+#' @param all_draws logical with a default of FALSE which discards burn-in
+#' @param nsim positive integer, number of iterations with default of 1000
+#' @param burn_in positive integer, number of iterations to remove with default of 100. Must be >= 100.
+#' @param thin positive integer, specifiers the period of saving samples. Default of 20 due to the high autocorrelation of the cutpoints
+#' @param seed positive integer, seed for random number generation
+#' @param verbose logical, print iteration number to keep track of progress
+#' @param max_iter_rej maximum number of rejection algorithm attempts for multivariate truncated normal
+#' @return mcmc
+#' @importFrom zoo na.approx
+#' @importFrom fastDummies dummy_cols
+#' @importFrom magic adiag
+#' @export
+
+baseline_bmr3 <- function(formula, data, ordinal_outcome = c("y_ord"),
+                          time_var = "time", patient_var = "patient_idx",
+                          random_slope = F, ar_cov = TRUE, nsim = 1000,
+                          burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
+                          sig_prior = 1000000000, sd_vec = c(0.15, 0.30)) {
+
+  ## Create storage
+  set.seed(seed)
+  bmrarm_start(env = environment())
+
+  ## Starting values for ordinal outcome
+  y[1:N_obs, 1] <- 0.5 + res_cuts[z, 1]
+  y[is.infinite(y[, 1]), 1] <- -0.5
+  y[is.na(y[, 1]), 1] <- 0
+
+  ## Starting values for continuous outcomes
+  df <- data.frame(patient = samp_info$pat_idx_long, y = as.numeric(y),
+                   outcome = rep(1:N_outcomes, each = N_obs)) %>%
+    group_by(patient, outcome) %>%
+    mutate(y_interp = na.approx(y, na.rm = FALSE),
+           y_interp = ifelse(!is.na(y_interp), y_interp,
+                             ifelse(row_number() == n(),
+                                    lag(y_interp), lead(y_interp))))
+  y <- matrix(df$y_interp, ncol = N_outcomes)
+  y[is.na(y)] <- 0
+  i <- 2
+  samp_info$burn_in <- burn_in
+  samp_info$max_iter <- 10000000
+  for(i in 2:nsim) {
+    samp_info$num_iter <- i
+
+    ## Regression coefficients
+    vals <- bmrarm_fc_sig_beta(y, X, Z_kron, cur_draws, samp_info)
+    #print("sb")
+    res_beta[, i] <- cur_draws$beta <- vals$beta
+    res_sig[, i] <- cur_draws$sigma <- vals$sig
+
+    # Autoregressive parameter
+    if(samp_info$ar_cov) {
+      vals <- bmrarm_mh_ar(y, X, Z_kron, cur_draws, samp_info)
+      #print("ar")
+      res_ar[i] <- cur_draws$ar <- vals$ar
+      res_accept[i, 2] <- vals$accept
+    }
+
+    ## Subject specific effects
+    vals <- bmrarm_fc_patient4(y, z, X, cur_draws, samp_info)
+    #res_pat_sig[, i] <- cur_draws$pat_sig <- sim_data$sig_alpha
+    #res_pat_sig[, i] <- cur_draws$pat_sig <- sim_data$sig_alpha
+    res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
+    res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
+    res_pat_sig_sd[, i] <- cur_draws$pat_sig_sd <- vals$pat_sig_sd
+    #print(head(cur_draws$pat_effects))
+
+    ## Latent values, missing values, cut points
+    y_cuts <- bmrarm_fc_y_cuts(y, z, X, Z_kron, cur_draws, samp_info)
+    #print("y")
+    y <-  res_y[,, i] <- y_cuts$y
+    res_cuts[, i] <- cur_draws$cuts <- y_cuts$cuts
+    res_accept[i, 1] <- y_cuts$accept
+
+    ## Update missing values
+    y <- res_y[,, i]<- bmrarm_fc_missing(y, z, X, Z_kron, cur_draws, samp_info)
+    #print("miss")
+
+    ## Cut points
+    #if(i %% 50 == 0) print(i)
+    #if(i %% 100 == 50) plot(res_cuts[4, ], type = "l")
+    if(i %% 100 == 50) plot(res_ar, type = "l")
+    if(i %% 100 == 0) plot(res_pat_sig[1, ], type = "l")
+  }
+
+  sim_use <- seq(burn_in + 1, nsim, by = thin)
+  draws <- list(
+    res_cuts = res_cuts[, sim_use],
+    res_beta = res_beta[, sim_use],
+    res_pat_sig = res_pat_sig[, sim_use],
+    res_ar = res_ar[sim_use],
+    res_sigma = res_sig[, sim_use],
+    res_y = res_y[,, sim_use],
+    res_pat_sig_sd = res_pat_sig_sd[, sim_use],
+    res_pat_eff = res_pat_eff[,, sim_use],
+    res_accept = res_accept[sim_use, ],
+    samp_info = samp_info,
+    X = X,
+    Z_kron = Z_kron, z = z)
+  draws
+}
+
+#' PX-DA MCMC routine to sample from HBMRVAR model
+#'
+#' @param formula an object of class "formula"; a symbolic description of the model to be fitted
+#' @param data a dataframe containing outcome variables, covariates, and a patient or subject identifier
+#' @param ordinal_outcomes a character string containing the names of the ordinal outcomes
+#' @param patient_var name of the patient or subject identifier
+#' @param sig_prior prior variance on the regression coefficients
+#' @param all_draws logical with a default of FALSE which discards burn-in
+#' @param nsim positive integer, number of iterations with default of 1000
+#' @param burn_in positive integer, number of iterations to remove with default of 100. Must be >= 100.
+#' @param thin positive integer, specifiers the period of saving samples. Default of 20 due to the high autocorrelation of the cutpoints
+#' @param seed positive integer, seed for random number generation
+#' @param verbose logical, print iteration number to keep track of progress
+#' @param max_iter_rej maximum number of rejection algorithm attempts for multivariate truncated normal
+#' @return mcmc
+#' @importFrom zoo na.approx
+#' @importFrom fastDummies dummy_cols
+#' @importFrom magic adiag
+#' @export
+
+baseline_bmr_test2 <- function(formula, data, ordinal_outcome = c("y_ord"),
+                               time_var = "time", patient_var = "patient_idx",
+                               random_slope = F, ar_cov = TRUE, nsim = 1000,
+                               burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
+                               sig_prior = 1000000000, sd_vec = c(0.15, 0.05),
+                               which_fc = c(T, T, T, T, T), base0 = F) {
+
+  ## Create storage
+  set.seed(seed)
+  bmrarm_start(env = environment())
+
+  ## Starting values for ordinal outcome
+  y[1:N_obs, 1] <- 0.5 + res_cuts[z, 1]
+  y[is.infinite(y[, 1]), 1] <- -0.5
+  y[is.na(y[, 1]), 1] <- 0
+
+  ## Starting values for continuous outcomes
+  df <- data.frame(patient = samp_info$pat_idx_long, y = as.numeric(y),
+                   outcome = rep(1:N_outcomes, each = N_obs)) %>%
+    group_by(patient, outcome) %>%
+    mutate(y_interp = na.approx(y, na.rm = FALSE),
+           y_interp = ifelse(!is.na(y_interp), y_interp,
+                             ifelse(row_number() == n(),
+                                    lag(y_interp), lead(y_interp))))
+  y <- matrix(df$y_interp, ncol = N_outcomes)
+  y[is.na(y)] <- 0
+  i <- 2
+  cur_draws$beta <- matrix(as.numeric(sim_data$beta), 2)
+  cur_draws$sigma <- sim_data$sigma
+  cur_draws$ar <- sim_data$ar
+  if(base0) cur_draws$ar <- 0
+  cur_draws$pat_effects <- sim_data$alpha
+  cur_draws$pat_sig <- sim_data$sig_alpha
+  cur_draws$cuts <- sim_data$cuts
+  samp_info$burn_in <- burn_in
+  samp_info$max_iter <- 10000000
+  y <- cbind(sim_data$truth$y1, sim_data$truth$y2)
+  for(i in 2:nsim) {
+    samp_info$num_iter <- i
+
+    ## Regression coefficients
+    if(which_fc[1]) {
+      vals <- bmrarm_fc_sig_beta(y, X, Z_kron, cur_draws, samp_info)
+      #print("sb")
+      res_beta[, i] <- cur_draws$beta <- vals$beta
+      res_sig[, i] <- cur_draws$sigma <- vals$sig
+      #res_sig_sd[, i] <- cur_draws$sig_sd <- vals$sig_sd
+    } else {
+      res_beta[, i] <- cur_draws$beta
+      res_sig[, i] <- cur_draws$sigma
+    }
+
+    # Autoregressive parameter
+    if(samp_info$ar_cov & which_fc[2]) {
+      vals <- bmrarm_mh_ar(y, X, Z_kron, cur_draws, samp_info)
+      #print("ar")
+      res_ar[i] <- cur_draws$ar <- vals$ar
+      res_accept[i, 2] <- vals$accept
+      #cur_draws$ar <- 0
+    } else {
+      res_ar[i] <- cur_draws$ar
+    }
+
+    ## Subject specific effects
+    if(which_fc[3]) {
+      vals <- bmrarm_fc_patient4(y, z, X, cur_draws, samp_info)
+      #print("pat")
+      res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
+      res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
+      res_pat_sig_sd[, i] <- cur_draws$pat_sig_sd <- vals$pat_sig_sd
+      #res_pat_sig_q[, i] <- vals$pat_sig_q
+      #res_accept[i, 3:6] <- vals$accept_vec
+      #res_pat_sig[, i] <- cur_draws$pat_sig
+    } else {
+      res_pat_sig[, i] <- cur_draws$pat_sig
+      res_pat_eff[,, i] <- cur_draws$pat_effects
+    }
+
+    ## Latent values, missing values, cut points
+    if(which_fc[4]) {
+      y_cuts <- bmrarm_fc_y_cuts(y, z, X, Z_kron, cur_draws, samp_info)
+      #print("y")
+      y <-  res_y[,, i] <- y_cuts$y
+      res_cuts[, i] <- cur_draws$cuts <- y_cuts$cuts
+      res_accept[i, 1] <- y_cuts$accept
+    } else {
+      res_y[,, i] <- y
+      res_cuts[, i] <- cur_draws$cuts
+    }
+
+    ## Update missing values
+    if(which_fc[5]) {
+      y <- res_y[,, i]<- bmrarm_fc_missing(y, z, X, Z_kron, cur_draws, samp_info)
+    }
+    #print("miss")
+
+    ## Cut points
+    if(i %% 50 == 0) print(i)
+    #if(i %% 100 == 50) plot(res_cuts[4, ], type = "l")
+    if(i %% 100 == 50) plot(res_ar, type = "l")
+    if(i %% 100 == 0) plot(res_pat_sig[1, ], type = "l")
+  }
+
+  sim_use <- seq(burn_in + 1, nsim, by = thin)
+  draws <- list(
+    res_cuts = res_cuts[, sim_use],
+    res_beta = res_beta[, sim_use],
+    res_pat_sig = res_pat_sig,
+    res_ar = res_ar[sim_use],
+    res_sigma = res_sig[, sim_use],
+    res_pat_sig_q = res_pat_sig_q[, sim_use],
+    res_pat_sig_sd = res_pat_sig_sd[, sim_use],
+    res_y = res_y[,, sim_use],
+    res_pat_eff = res_pat_eff[,, sim_use],
+    samp_info = samp_info,
+    res_accept = res_accept[sim_use, ],
+    X = X,
+    Z_kron = Z_kron, z = z)
+  draws
+}
+
+#' Full conditional draws of the latent continuous values
+#'
+#' @param y matrix of multivariate observations
+#' @param z matrix of ordinal voutcomes
+#' @param sig covariance matrix for the VAR process
+#' @param sig0 for the initial values
+#' @param M transition matrix for the VAR(1) component
+#' @param cuts current threshold values
+#' @param miss_mat locations of missing values
+#' @param samp_info information for which locations to sample
+#' @param num_iter current iteration number
+#' @import tmvtnorm
+#' @return matrix
+#' @export
+
+bmrarm_fc_patient2 <- function(y, z, X, cur_draws, samp_info, prior_mat) {
+
+  ## Generate full sigma matrix
+  N_pat <- samp_info$N_pat
+  sig_alpha_inv <- chol2inv(chol(cur_draws$pat_sig))
+  sig_inv <- chol2inv(chol(cur_draws$sigma))
+  resid_mat <- y - X %*% cur_draws$beta
+  N_pat_eff <- ncol(samp_info$pat_z_kron[[1]])
+
+  ## Sigma inverses only needed is autoregressive covariance matrix
+  if(samp_info$ar_cov) {
+    sig_list <- get_sig_list(cur_draws, samp_info)
+  }
+
+  ## Patient effects
+  res <- matrix(NA, nrow = N_pat, ncol = N_pat_eff)
+
+  for(i in 1:N_pat) {
+    ## Get locations and time matrix for patient
+    locs <- samp_info$pat_locs[[i]]
+    time_ind <- samp_info$pat_time_ind[i]
+    resid_vec <- as.numeric(resid_mat[locs, ])
+    pat_Z <- samp_info$pat_z_kron[[i]]
+
+    ## Patient specific covariance matrix
+    if(samp_info$ar_cov) {
+      pat_sig_inv <- sig_list$sig_inv_list[[time_ind]]
+    } else {
+      pat_sig_inv <- kronecker(sig_inv, diag(rep(1, samp_info$pat_N_obs[[i]])))
+    }
+
+    ## Cross products, covariance, alpha hat
+    Z_sig_prod <- crossprod(pat_Z, pat_sig_inv)
+    post_cov <- chol2inv(chol(Z_sig_prod %*% pat_Z + sig_alpha_inv))
+    post_mean <- post_cov %*% Z_sig_prod %*% resid_vec
+    L <- t(chol(post_cov))
+    res[i, ] <- L %*% rnorm(length(post_mean)) + post_mean
+  }
+
+  ## New Covariance matrix for patient specific effects
+  pat_sig <- rinvwishart(N_pat + N_pat_eff,
+                         crossprod(res) + prior_mat)
+  list(pat_effects = res, pat_sig = pat_sig)
+}
+
+#' Full conditional draws of the latent continuous values
+#'
+#' @param y matrix of multivariate observations
+#' @param z matrix of ordinal voutcomes
+#' @param sig covariance matrix for the VAR process
+#' @param sig0 for the initial values
+#' @param M transition matrix for the VAR(1) component
+#' @param cuts current threshold values
+#' @param miss_mat locations of missing values
+#' @param samp_info information for which locations to sample
+#' @param num_iter current iteration number
+#' @import tmvtnorm
+#' @return matrix
+#' @export
+
+bmrarm_fc_patient3 <- function(y, z, X, cur_draws, samp_info) {
+
+  ## Generate full sigma matrix
+  N_pat <- samp_info$N_pat
+  sig_alpha_inv <- chol2inv(chol(cur_draws$pat_sig))
+  sig_inv <- chol2inv(chol(cur_draws$sigma))
+  resid_mat <- y - X %*% cur_draws$beta
+  N_pat_eff <- ncol(samp_info$pat_z_kron[[1]])
+
+  ## Sigma inverses only needed is autoregressive covariance matrix
+  if(samp_info$ar_cov) {
+    sig_list <- get_sig_list(cur_draws, samp_info)
+  }
+
+  ## Patient effects
+  res <- matrix(NA, nrow = N_pat, ncol = N_pat_eff)
+
+  for(i in 1:N_pat) {
+    ## Get locations and time matrix for patient
+    locs <- samp_info$pat_locs[[i]]
+    time_ind <- samp_info$pat_time_ind[i]
+    resid_vec <- as.numeric(resid_mat[locs, ])
+    pat_Z <- samp_info$pat_z_kron[[i]]
+
+    ## Patient specific covariance matrix
+    if(samp_info$ar_cov) {
+      pat_sig_inv <- sig_list$sig_inv_list[[time_ind]]
+    } else {
+      pat_sig_inv <- kronecker(sig_inv, diag(rep(1, samp_info$pat_N_obs[[i]])))
+    }
+
+    ## Cross products, covariance, alpha hat
+    Z_sig_prod <- crossprod(pat_Z, pat_sig_inv)
+    post_cov <- chol2inv(chol(Z_sig_prod %*% pat_Z + sig_alpha_inv))
+    post_mean <- post_cov %*% Z_sig_prod %*% resid_vec
+    L <- t(chol(post_cov))
+    res[i, ] <- L %*% rnorm(length(post_mean)) + post_mean
+  }
+
+  ## Correlation matrix
+  sd_inv <- diag(1 / cur_draws$pat_sig_sd)
+  pat_sig_q <- rinvwishart(N_pat + N_pat_eff + 1,
+                           sd_inv %*% crossprod(res) %*% sd_inv +
+                             diag(rep(1, 4)))
+
+  ## SD parameters
+  accept_vec <- rep(0, N_pat_eff)
+  for(i in 1:N_pat_eff) {
+    ## Propose new values
+    cur_draws2 <- cur_draws
+    cur_draws2$pat_sig_sd[i] <- exp(rnorm(1, log(cur_draws2$pat_sig_sd[i]),
+                                          sd = samp_info$sd_pat_sd))
+    cur_draws2$pat_sig <- diag(cur_draws2$pat_sig_sd) %*% pat_sig_q %*% diag(cur_draws2$pat_sig_sd)
+
+    ## Calculate comparison values
+    pat_inv_old <- chol2inv(chol(cur_draws$pat_sig))
+    pat_inv_new <- chol2inv(chol(cur_draws2$pat_sig))
+
+    comp_old <- N_pat / 2 * determinant(pat_inv_old, logarithm = T)[[1]][1] -
+      0.5 * sum(diag(res %*% pat_inv_old %*% t(res))) +
+      dnorm(log(cur_draws$pat_sig_sd[i]), 0, sd = 10000, log = T)
+
+    comp_new <- N_pat / 2 * determinant(pat_inv_new, logarithm = T)[[1]][1] -
+      0.5 * sum(diag(res %*% pat_inv_new %*% t(res))) +
+      dnorm(log(cur_draws2$pat_sig_sd[i]), 0, sd = 10000, log = T)
+    compar_val <- comp_new - comp_old
+
+    if(compar_val >= log(runif(1))) {
+      cur_draws$pat_sig_sd[i] <- cur_draws2$pat_sig_sd[i]
+      accept_vec[i] <- 1
+    }
+  }
+
+  # ## SD parameters
+  # accept_vec <- rep(0, N_pat_eff)
+  # ## Propose new values
+  # cur_draws2 <- cur_draws
+  # cur_draws2$pat_sig_sd <- exp(rnorm(N_pat_eff, log(cur_draws2$pat_sig_sd),
+  #                                       sd = samp_info$sd_pat_sd))
+  # cur_draws2$pat_sig <- diag(cur_draws2$pat_sig_sd) %*% pat_sig_q %*% diag(cur_draws2$pat_sig_sd)
+  #
+  # ## Calculate comparison values
+  # pat_inv_old <- chol2inv(chol(cur_draws$pat_sig))
+  # pat_inv_new <- chol2inv(chol(cur_draws2$pat_sig))
+  #
+  # comp_old <- N_pat / 2 * determinant(pat_inv_old, logarithm = T)[[1]][1] -
+  #   0.5 * sum(diag(res %*% pat_inv_old %*% t(res)))
+  #
+  # comp_new <- N_pat / 2 * determinant(pat_inv_new, logarithm = T)[[1]][1] -
+  #   0.5 * sum(diag(res %*% pat_inv_new %*% t(res)))
+  # compar_val <- comp_new - comp_old
+  #
+  # if(compar_val >= log(runif(1))) {
+  #   cur_draws$pat_sig_sd <- cur_draws2$pat_sig_sd
+  #   accept_vec <- 1
+  # }
+
+  cur_draws$pat_sig_sd <- c(cur_draws$pat_sig_sd[1] , 1, 1, 1)
+  list(pat_effects = res,
+       pat_sig = diag(cur_draws$pat_sig_sd) %*% pat_sig_q %*% diag(cur_draws$pat_sig_sd),
+       pat_sig_sd = cur_draws$pat_sig_sd, accept_vec = accept_vec, pat_sig_q = pat_sig_q)
+}
+
+#' Full conditional draws of the latent continuous values
+#'
+#' @param y matrix of multivariate observations
+#' @param z matrix of ordinal voutcomes
+#' @param sig covariance matrix for the VAR process
+#' @param sig0 for the initial values
+#' @param M transition matrix for the VAR(1) component
+#' @param cuts current threshold values
+#' @param miss_mat locations of missing values
+#' @param samp_info information for which locations to sample
+#' @param num_iter current iteration number
+#' @import tmvtnorm
+#' @return matrix
+#' @export
+
+bmrarm_fc_patient4 <- function(y, z, X, cur_draws, samp_info) {
+
+  ## Generate full sigma matrix
+  N_pat <- samp_info$N_pat
+  sig_alpha_inv <- chol2inv(chol(cur_draws$pat_sig))
+  sig_inv <- chol2inv(chol(cur_draws$sigma))
+  resid_mat <- y - X %*% cur_draws$beta
+  N_pat_eff <- ncol(samp_info$pat_z_kron[[1]])
+
+  ## Sigma inverses only needed is autoregressive covariance matrix
+  if(samp_info$ar_cov) {
+    sig_list <- get_sig_list(cur_draws, samp_info)
+  }
+
+  ## Patient effects
+  res <- matrix(NA, nrow = N_pat, ncol = N_pat_eff)
+
+  for(i in 1:N_pat) {
+    ## Get locations and time matrix for patient
+    locs <- samp_info$pat_locs[[i]]
+    time_ind <- samp_info$pat_time_ind[i]
+    resid_vec <- as.numeric(resid_mat[locs, ])
+    pat_Z <- samp_info$pat_z_kron[[i]]
+
+    ## Patient specific covariance matrix
+    if(samp_info$ar_cov) {
+      pat_sig_inv <- sig_list$sig_inv_list[[time_ind]]
+    } else {
+      pat_sig_inv <- kronecker(sig_inv, diag(rep(1, samp_info$pat_N_obs[[i]])))
+    }
+
+    ## Cross products, covariance, alpha hat
+    Z_sig_prod <- crossprod(pat_Z, pat_sig_inv)
+    post_cov <- chol2inv(chol(Z_sig_prod %*% pat_Z + sig_alpha_inv))
+    post_mean <- post_cov %*% Z_sig_prod %*% resid_vec
+    L <- t(chol(post_cov))
+    res[i, ] <- L %*% rnorm(length(post_mean)) + post_mean
+  }
+
+  ## Update Correlation matrix
+  sd_mat <- diag(cur_draws$pat_sig_sd)
+  pat_sig <- rinvwishart(N_pat + N_pat_eff + 1, crossprod(res) + 4 * sd_mat)
+
+  ## Update SDs
+  pat_sig_inv <- chol2inv(chol(pat_sig))
+  pat_sig_sd <- 1 / LaplacesDemon::rinvgamma(
+    N_pat_eff, shape = (2 + 4) / 2,
+    scale = 2 * diag(pat_sig_inv) + 1 / 100000000
+  )
+
+  list(pat_effects = res,
+       pat_sig = pat_sig,
+       pat_sig_sd = pat_sig_sd)
+}
+
+#' Full conditional draws of the regression coefficients
+#'
+#' @param subject_effects matrix of patient specific intercepts
+#' @param sigma residual covariance matrix
+#' @param prior_alpha prior term for shape
+#' @param prior_alpha prior term for scale
+#' @return scalar
+#' @importFrom matrixcalc is.positive.definite
+#' @importFrom LaplacesDemon rinvwishart dinvwishart
+#' @importFrom MBSP matrix.normal
+#' @export
+
+bmrarm_fc_sig_beta2 <- function(y, X, Z_kron, cur_draws, samp_info) {
+
+  ## Constant
+  N_outcomes <- samp_info$N_outcomes
+  N_covars <- samp_info$N_covars
+
+  ## Mean of patient effects
+  mean_vec <- rowSums(Z_kron * cur_draws$pat_effects[samp_info$pat_idx_long, ])
+  resid_mat <- y - matrix(mean_vec, ncol = N_outcomes)
+
+  ## Calculate posterior covariance matrix
+  cov_vals <- matrix(0, N_covars, N_covars)
+  mean_vals <- matrix(0, nrow = N_covars, ncol = N_outcomes)
+  resid_vals <- matrix(0, N_outcomes, N_outcomes)
+
+  ## Sigma inverses only needed is autoregressive covariance matrix
+  if(samp_info$ar_cov) {
+    sig_list <- get_sig_list(cur_draws, samp_info)
+  }
+
+  for(i in 1:samp_info$N_pat) {
+    ## Get locations, partial residuals after subtracting person effects
+    locs <- samp_info$pat_locs[[i]]
+    X_pat <- samp_info$pat_X[[i]]
+    time_ind <- samp_info$pat_time_ind[i]
+    if(samp_info$ar_cov) {
+      ## Summation of residuals, mean values, and covariance values
+      time_inv <- sig_list$time_inv[[time_ind]]
+      resid_vals <- resid_vals +
+        crossprod(resid_mat[locs, ], time_inv) %*% resid_mat[locs, ]
+      mean_vals <- mean_vals + crossprod(X_pat, time_inv) %*% resid_mat[locs, ]
+      cov_vals <- cov_vals + crossprod(X_pat, time_inv) %*% X_pat
+    } else {
+      ## Summation of residuals, mean values, and covariance values
+      resid_vals <- resid_vals + crossprod(resid_mat[locs, ], resid_mat[locs, ])
+      mean_vals <- mean_vals + crossprod(X_pat, resid_mat[locs, ])
+      cov_vals <- cov_vals + crossprod(X_pat, X_pat)
+    }
+  }
+
+  ## Get posterior draw
+  sd_inv <- diag(1 / cur_draws$sig_sd)
+  prior <- diag(rep(0.00001, N_covars))
+  x_inv <- chol2inv(chol(prior + cov_vals))
+  beta_hat <- x_inv %*% mean_vals
+  val <- resid_vals + 4 * sd_inv - t(mean_vals) %*% beta_hat
+
+  ## Draw updates
+  sig <- rinvwishart(samp_info$N_obs + N_outcomes + 1, val)
+  beta <- matrix.normal(M = beta_hat, V = sig, U = x_inv)
+
+  ## Update SDs
+  sig_inv <- chol2inv(chol(sig))
+  sig_sd <- LaplacesDemon::rinvgamma(
+    N_outcomes, shape = (2 + N_outcomes) / 2,
+    scale = 2 * diag(sig_inv) + 1 / 10000
+  )
+
+  list(beta = beta, sig = sig, sig_sd = sig_sd)
+}
+
+#' PX-DA MCMC routine to sample from HBMRVAR model
+#'
+#' @param formula an object of class "formula"; a symbolic description of the model to be fitted
+#' @param data a dataframe containing outcome variables, covariates, and a patient or subject identifier
+#' @param ordinal_outcomes a character string containing the names of the ordinal outcomes
+#' @param patient_var name of the patient or subject identifier
+#' @param sig_prior prior variance on the regression coefficients
+#' @param all_draws logical with a default of FALSE which discards burn-in
+#' @param nsim positive integer, number of iterations with default of 1000
+#' @param burn_in positive integer, number of iterations to remove with default of 100. Must be >= 100.
+#' @param thin positive integer, specifiers the period of saving samples. Default of 20 due to the high autocorrelation of the cutpoints
+#' @param seed positive integer, seed for random number generation
+#' @param verbose logical, print iteration number to keep track of progress
+#' @param max_iter_rej maximum number of rejection algorithm attempts for multivariate truncated normal
+#' @return mcmc
+#' @importFrom zoo na.approx
+#' @importFrom fastDummies dummy_cols
+#' @importFrom magic adiag
+#' @export
+
+bmr_cv <- function(formula, data, ordinal_outcome = c("y_ord"),
+                   time_var = "time", patient_var = "patient_idx",
+                   random_slope = F, ar_cov = TRUE, nsim = 1000,
+                   burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
+                   sig_prior = 1000000000, sd_vec = c(0.15, 0.30)) {
+
+  ## Long version of dataset
+  X <- model.matrix.lm(as.formula(formula), data = data, na.action = "na.pass")
+  out_vars <- setdiff(all.vars(formula), colnames(X))
+  cont_out_var <- setdiff(out_vars, ordinal_outcome)
+  data_long <- rbind(
+    select(data, patient_var, time_var, val = ordinal_outcome) %>%
+      mutate(outcome = 1),
+    select(data, patient_var, time_var, val = cont_out_var) %>%
+      mutate(outcome = 2)) %>%
+    mutate(folds = NA)
+
+  ## Max number of observations
+  max_obs <- data_long %>%
+    group_by(pat_idx) %>%
+    summarise(N = n()) %>%
+    ungroup() %>%
+    select(N) %>%
+    unlist() %>%
+    max()
+
+  ## Folds
+  obs_responses <- which(!is.na(data_long$val))
+  set.seed(seed)
+  folds <- loo::kfold_split_stratified(max(max_obs, 10),
+                                       data_long$pat_idx[obs_responses])
+
+  data_long$folds[obs_responses] <- folds
+  data$folds1 <- data_long$folds[1:nrow(data)]
+  data$folds2 <- data_long$folds[(1:nrow(data)) + nrow(data)]
+  cv_val <- 0
+
+  for(i in 1:max(folds)) {
+    data_tmp <- data
+    data_tmp[data$folds1 == i & !is.na(data$folds1), ordinal_outcome] <- NA
+    data_tmp[data$folds2 == i & !is.na(data$folds2), cont_out_var] <- NA
+    cv_locs <- list(all_locs = which(data_long$folds == i),
+                    cont_locs = which(data$folds2 == i))
+
+    samps <- baseline_bmr(formula = formula, data = data_tmp,
+                          ordinal_outcome = ordinal_outcome,
+                          patient_var = patient_var,
+                          random_slope = random_slope,
+                          time_var = time_var, ar_cov = ar_cov,
+                          burn_in = burn_in, nsim = nsim, thin = thin,
+                          seed = seed,
+                          sd_vec = sd_vec)
+
+    if(!ar_cov) samps$res_ar[] <- 0
+    cv_val <- c(cv_val, get_loocv_ar(samps, cv_locs,
+                                     z_true = data[, ordinal_outcome],
+                                     y_true = data[, cont_out_var]))
+    print(i)
+    print(sum(cv_val))
+  }
+  list(cv_vals = cv_val[-1], sum_cv_vals = sum(cv_val))
+}
+
+#' Get DIC
+#'
+#' @param y_current current continous outcome values
+#' @param mean_vec vector of mean values
+#' @param pre_calc_mat a pre-calculated matrix
+#' @param ord_loc number of ordinal outcomes
+#' @importFrom mvtnorm dmvnorm
+#' @importFrom loo kfold_split_stratified
+#' @import tidyr
+#' @return scalar
+
+strat_model_wrapper <- function(data, pat_idx, time, ord_out, cont_out) {
+  ## Long version of dataset
+  data_long <- rbind(
+    select(data, pat_idx, time, val = ord_out) %>% mutate(outcome = 1),
+    select(data, pat_idx, time, val = cont_out) %>% mutate(outcome = 2)) %>%
+    mutate(folds = NA)
+
+  ## Max number of observations
+  max_obs <- data_long %>%
+    group_by(pat_idx) %>%
+    summarise(N = n()) %>%
+    ungroup() %>%
+    select(N) %>%
+    unlist() %>%
+    max()
+
+  ## Folds
+  obs_responses <- which(!is.na(data_long$val))
+
+  ## Find unique folds
+  correct_folds <- F
+  fold_iter <- 1
+  #while(fold_iter <= 100 & !correct_folds)
+  folds <- loo::kfold_split_stratified(max(max_obs, 10),
+                                       data_long$pat_idx[obs_responses])
+  check <- data_long %>%
+    group_by(pat_idx) %>%
+    summarise(unique_fold = length(unique(na.omit(folds))),
+              obs_responses = sum(!is.na(val)),
+              correct_folds = sum(unique_fold != obs_responses)) %>%
+    ungroup() %>%
+    summarise(sum(correct_folds))
+
+
+  data_long$folds[obs_responses] <- folds
+  data$folds1 <- data_long$folds[1:nrow(data)]
+  data$folds2 <- data_long$folds[(1:nrow(data)) + nrow(data)]
+  cv_val <- 0
+
+  for(i in 1:nrow(cv_vals)) {
+    data_tmp <- data
+    data_tmp$y_ord[data$folds1 == i] <- NA
+    data_tmp$y2[data$folds2 == i] <- NA
+    cv_locs <- list(all_locs = which(data_long$folds == i),
+                    cont_locs = which(data$folds2 == i))
+
+    samps <- baseline_bmr(formula = cbind(y_ord, y2) ~ time, data = data_tmp,
+                          ordinal_outcome = "y_ord", patient_var = "pat_idx",
+                          random_slope = T, time_var = "time", ar_cov = F,
+                          burn_in = 100, nsim = 400, thin = 5, seed = 3, sd_vec = c(0.15, 0.05))
+    samps$res_ar[] <- 0
+
+    cv_val <- sum(get_loocv_ar(samps, cv_locs, z_true = data$y_ord,
+                               y_true = data$y2)) + cv_val
+    print(i)
+    print(cv_val)
+  }
+  sum(cv_vals)
+}
+
+#' Full conditional draws of the latent continuous values
+#'
+#' @param y matrix of multivariate observations
+#' @param z matrix of ordinal voutcomes
+#' @param sig covariance matrix for the VAR process
+#' @param sig0 for the initial values
+#' @param M transition matrix for the VAR(1) component
+#' @param cuts current threshold values
+#' @param miss_mat locations of missing values
+#' @param samp_info information for which locations to sample
+#' @param num_iter current iteration number
+#' @import tmvtnorm
+#' @return matrix
+#' @export
+
+bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, sep_sig) {
+
+  ## Generate full sigma matrix
+  N_pat <- samp_info$N_pat
+  sig_alpha_inv <- chol2inv(chol(cur_draws$pat_sig))
+  sig_inv <- chol2inv(chol(cur_draws$sigma))
+  resid_mat <- y - X %*% cur_draws$beta
+  N_pat_eff <- ncol(samp_info$pat_z_kron[[1]])
+
+  ## Sigma inverses only needed is autoregressive covariance matrix
+  if(samp_info$ar_cov) {
+    sig_list <- get_sig_list(cur_draws, samp_info)
+  }
+
+  ## Patient effects
+  res <- matrix(NA, nrow = N_pat, ncol = N_pat_eff)
+
+  for(i in 1:N_pat) {
+    ## Get locations and time matrix for patient
+    locs <- samp_info$pat_locs[[i]]
+    time_ind <- samp_info$pat_time_ind[i]
+    resid_vec <- as.numeric(resid_mat[locs, ])
+    pat_Z <- samp_info$pat_z_kron[[i]]
+
+    ## Patient specific covariance matrix
+    if(samp_info$ar_cov) {
+      pat_sig_inv <- sig_list$sig_inv_list[[time_ind]]
+    } else {
+      pat_sig_inv <- kronecker(sig_inv, diag(rep(1, samp_info$pat_N_obs[[i]])))
+    }
+
+    ## Cross products, covariance, alpha hat
+    Z_sig_prod <- crossprod(pat_Z, pat_sig_inv)
+    post_cov <- chol2inv(chol(Z_sig_prod %*% pat_Z + sig_alpha_inv))
+    post_mean <- post_cov %*% Z_sig_prod %*% resid_vec
+    L <- t(chol(post_cov))
+    res[i, ] <- L %*% rnorm(length(post_mean)) + post_mean
+  }
+
+  ## Correlation matrix
+  sd_inv <- diag(1 / cur_draws$pat_sig_sd)
+  pat_sig_q <- rinvwishart(N_pat + N_pat_eff + 1,
+                           sd_inv %*% crossprod(res) %*% sd_inv +
+                             diag(rep(1, 4)))
+
+  ## SD parameters
+  accept_vec <- rep(0, N_pat_eff)
+  for(i in 1:N_pat_eff) {
+    ## Propose new values
+    cur_draws2 <- cur_draws
+    cur_draws2$pat_sig_sd[i] <- rnorm(1, cur_draws$pat_sig_sd[i], sd = samp_info$sd_pat_sd[i])
+    cur_draws2$pat_sig <- diag(cur_draws2$pat_sig_sd) %*% pat_sig_q %*% diag(cur_draws2$pat_sig_sd)
+
+    ## Calculate comparison values
+    pat_inv_old <- chol2inv(chol(cur_draws$pat_sig))
+    pat_inv_new <- chol2inv(chol(cur_draws2$pat_sig))
+
+    comp_old <- N_pat / 2 * determinant(pat_inv_old, logarithm = T)[[1]][1] -
+      0.5 * sum(diag(res %*% pat_inv_old %*% t(res)))
+
+    comp_new <- N_pat / 2 * determinant(pat_inv_new, logarithm = T)[[1]][1] -
+      0.5 * sum(diag(res %*% pat_inv_new %*% t(res)))
+    compar_val <- comp_new - comp_old
+
+    if(compar_val >= log(runif(1)) & cur_draws2$pat_sig_sd[i] > 0) {
+      cur_draws$pat_sig_sd[i] <- cur_draws2$pat_sig_sd[i]
+      accept_vec[i] <- 1
+    }
+  }
+
+  list(pat_effects = res,
+       pat_sig = diag(cur_draws$pat_sig_sd) %*% pat_sig_q %*% diag(cur_draws$pat_sig_sd),
+       pat_sig_sd = cur_draws$pat_sig_sd, accept_vec = accept_vec, pat_sig_q = pat_sig_q)
+}
+
+#' PX-DA MCMC routine to sample from HBMRVAR model
+#'
+#' @param formula an object of class "formula"; a symbolic description of the model to be fitted
+#' @param data a dataframe containing outcome variables, covariates, and a patient or subject identifier
+#' @param ordinal_outcomes a character string containing the names of the ordinal outcomes
+#' @param patient_var name of the patient or subject identifier
+#' @param sig_prior prior variance on the regression coefficients
+#' @param all_draws logical with a default of FALSE which discards burn-in
+#' @param nsim positive integer, number of iterations with default of 1000
+#' @param burn_in positive integer, number of iterations to remove with default of 100. Must be >= 100.
+#' @param thin positive integer, specifiers the period of saving samples. Default of 20 due to the high autocorrelation of the cutpoints
+#' @param seed positive integer, seed for random number generation
+#' @param verbose logical, print iteration number to keep track of progress
+#' @param max_iter_rej maximum number of rejection algorithm attempts for multivariate truncated normal
+#' @return mcmc
+#' @importFrom zoo na.approx
+#' @importFrom fastDummies dummy_cols
+#' @importFrom magic adiag
+#' @importFrom lme4 lmer VarCorr lmerControl
+#' @export
+
+baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
+                         time_var = "time", patient_var = "patient_idx",
+                         random_slope = F, ar_cov = TRUE, nsim = 1000,
+                         burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
+                         sig_prior = 1000000000, sd_vec = c(0.15, 0.30),
+                         N_burn_trunc = 5, sep_sig = T) {
+
+  ## Create storage
+  set.seed(seed)
+  bmrarm_start(env = environment())
+  cont_out_var <- setdiff(out_vars, ordinal_outcome)
+
+  ## Starting values for ordinal outcome
+  y[1:N_obs, 1] <- 0.5 + res_cuts[z, 1]
+  y[is.infinite(y[, 1]), 1] <- -0.5
+  y[is.na(y[, 1]), 1] <- 0
+
+  ## Starting values for continuous outcomes
+  df <- data.frame(patient = samp_info$pat_idx_long, y = as.numeric(y),
+                   outcome = rep(1:N_outcomes, each = N_obs)) %>%
+    group_by(patient, outcome) %>%
+    mutate(y_interp = na.approx(y, na.rm = FALSE),
+           y_interp = ifelse(!is.na(y_interp), y_interp,
+                             ifelse(row_number() == n(),
+                                    lag(y_interp), lead(y_interp))))
+  y <- matrix(df$y_interp, ncol = N_outcomes)
+  y[is.na(y)] <- 0
+  i <- 2
+  samp_info$burn_in <- burn_in
+  samp_info$max_iter <- 10000000
+
+  ## Emprical bayes priors for the random effects covariance matrix
+  full_data <- rbind(data, data)
+  full_data$outcomes <- ifelse(1:nrow(full_data) <= nrow(data),
+                               data[, ordinal_outcome], data[, cont_out_var])
+  full_data$ord_out <- as.numeric(1:nrow(full_data) <= nrow(data))
+  full_data$cont_out <- as.numeric(1:nrow(full_data) > nrow(data))
+  full_data$variable <- ifelse(1:nrow(full_data) <= nrow(data), "ord", "cont")
+  full_data <- full_data[nrow(full_data):1, ]
+  full_data <- full_data[!is.na(full_data$outcomes), ]
+
+  ## Formula for the fixed effects
+  coef_string <- paste0(c("ord_out:", "cont_out:"), deparse(formula[[3]]),
+                        collapse = "+")
+  fixed_form <- as.formula(paste0("outcomes ~ 0 + ord_out + cont_out +",
+                                  coef_string))
+
+  ## Formula for the random effects
+  if(random_slope) {
+    rand_string <- paste0(c("ord_out:", "cont_out:"), time_var, collapse = "+")
+    rand_form <- as.formula(paste0("outcomes ~ 0 + ord_out + cont_out +",
+                                   rand_string, "|", patient_var))
+  } else {
+    rand_form <- as.formula(paste0("outcomes ~ 0 + ord_out + cont_out |",
+                                   patient_var))
+  }
+
+  ## Fit models, resort to optim if that doesnt work
+  mod <- tryCatch(expr = {
+    lme(fixed_form, random = rand_form, data = full_data,
+        weights = varIdent(form = ~1 | variable))
+  },
+  warning = function(w) {
+    lme(fixed_form, random = rand_form, data = full_data,
+         )
+  })
+  var_names <- c("ord_out", "cont_out", paste0("ord_out:", time_var),
+                 paste0("cont_out:", time_var))
+
+  lme
+
+  as.numeric(VarCorr(mod)[, 1][var_names])
+  priors <- c(as.data.frame(VarCorr(mod))[1:N_pat_effects, "vcov"],
+              as.data.frame(VarCorr(cont_mod))[1:N_pat_effects, "vcov"])
+
+  ## Pass prior matrices
+  if(random_slope) {
+    prior_list = list(prior_int = diag(priors[c(1, 3)]) * N_outcomes,
+                      prior_slope = diag(priors[c(2, 4)]) * N_outcomes,
+                      full = diag(priors) * N_outcomes)
+  } else {
+    prior_list = list(prior_int = diag(priors * N_outcomes))
+  }
+
+  for(i in 2:nsim) {
+    samp_info$num_iter <- i
+
+    ## Regression coefficients
+    vals <- bmrarm_fc_sig_beta(y, X, Z_kron, cur_draws, samp_info)
+    res_beta[, i] <- cur_draws$beta <- vals$beta
+    res_sig[, i] <- cur_draws$sigma <- vals$sig
+
+    # Autoregressive parameter
+    if(samp_info$ar_cov) {
+      vals <- bmrarm_mh_ar(y, X, Z_kron, cur_draws, samp_info)
+      res_ar[i] <- cur_draws$ar <- vals$ar
+      res_accept[i, 2] <- vals$accept
+    }
+
+    ## Subject specific effects
+    vals <- bmrarm_fc_patient(y, z, X, cur_draws, samp_info, prior_list, sep_sig)
+    res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
+    res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
+
+    ## Latent values, missing values, cut points
+    y_cuts <- bmrarm_fc_y_cuts(y, z, X, Z_kron, cur_draws, samp_info)
+    y <-  res_y[,, i] <- y_cuts$y
+    res_cuts[, i] <- cur_draws$cuts <- y_cuts$cuts
+    res_accept[i, 1] <- y_cuts$accept
+
+    ## Update missing values
+    y <- res_y[,, i]<- bmrarm_fc_missing(y, z, X, Z_kron, cur_draws, samp_info)
+
+    ## Cut points
+    if(i %% 150 == 100) plot(res_cuts[4, ], type = "l")
+    if(i %% 150 == 50) plot(res_ar, type = "l")
+    if(i %% 150 == 0) plot(res_pat_sig[1, ], type = "l")
+  }
+
+  sim_use <- seq(burn_in + 1, nsim, by = thin)
+  draws <- list(
+    res_cuts = res_cuts[, sim_use],
+    res_beta = res_beta[, sim_use],
+    res_pat_sig = res_pat_sig[, sim_use],
+    res_ar = res_ar[sim_use],
+    res_sigma = res_sig[, sim_use],
+    res_y = res_y[,, sim_use],
+    res_pat_eff = res_pat_eff[,, sim_use],
+    res_accept = res_accept[sim_use, ],
+    samp_info = samp_info,
+    X = X,
+    Z_kron = Z_kron, z = z)
+  draws
+}
+
+#' PX-DA MCMC routine to sample from HBMRVAR model
+#'
+#' @param formula an object of class "formula"; a symbolic description of the model to be fitted
+#' @param data a dataframe containing outcome variables, covariates, and a patient or subject identifier
+#' @param ordinal_outcomes a character string containing the names of the ordinal outcomes
+#' @param patient_var name of the patient or subject identifier
+#' @param sig_prior prior variance on the regression coefficients
+#' @param all_draws logical with a default of FALSE which discards burn-in
+#' @param nsim positive integer, number of iterations with default of 1000
+#' @param burn_in positive integer, number of iterations to remove with default of 100. Must be >= 100.
+#' @param thin positive integer, specifiers the period of saving samples. Default of 20 due to the high autocorrelation of the cutpoints
+#' @param seed positive integer, seed for random number generation
+#' @param verbose logical, print iteration number to keep track of progress
+#' @param max_iter_rej maximum number of rejection algorithm attempts for multivariate truncated normal
+#' @return mcmc
+#' @importFrom zoo na.approx
+#' @importFrom fastDummies dummy_cols
+#' @importFrom magic adiag
+#' @importFrom lme4 lmer VarCorr lmerControl
+#' @export
+
+baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
+                         time_var = "time", patient_var = "patient_idx",
+                         random_slope = F, ar_cov = TRUE, nsim = 1000,
+                         burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
+                         sig_prior = 1000000000, sd_vec = c(0.15, 0.30),
+                         N_burn_trunc = 5, sep_sig = T) {
+
+  ## Create storage
+  set.seed(seed)
+  bmrarm_start(env = environment())
+  cont_out_var <- setdiff(out_vars, ordinal_outcome)
+
+  ## Starting values for ordinal outcome
+  y[1:N_obs, 1] <- 0.5 + res_cuts[z, 1]
+  y[is.infinite(y[, 1]), 1] <- -0.5
+  y[is.na(y[, 1]), 1] <- 0
+
+  ## Starting values for continuous outcomes
+  df <- data.frame(patient = samp_info$pat_idx_long, y = as.numeric(y),
+                   outcome = rep(1:N_outcomes, each = N_obs)) %>%
+    group_by(patient, outcome) %>%
+    mutate(y_interp = na.approx(y, na.rm = FALSE),
+           y_interp = ifelse(!is.na(y_interp), y_interp,
+                             ifelse(row_number() == n(),
+                                    lag(y_interp), lead(y_interp))))
+  y <- matrix(df$y_interp, ncol = N_outcomes)
+  y[is.na(y)] <- 0
+  i <- 2
+  samp_info$burn_in <- burn_in
+  samp_info$max_iter <- 10000000
+
+  ## Emprical bayes priors for the random effects covariance matrix
+  if(random_slope) {
+    form_string <- paste0("~ . + (", time_var, " |", patient_var, ")")
+  } else {
+    form_string <- paste0("~ . + (1|", patient_var, ")")
+  }
+  form_use <- update(formula, as.formula(form_string))
+  ord_form <- reformulate(deparse(form_use[[3]]), response = ordinal_outcome)
+  cont_form <- reformulate(deparse(form_use[[3]]), response = cont_out_var)
+
+  ## Fit models, default to nelder_mead if optimization doesn't work
+  ord_mod <- tryCatch(expr = {
+    lmer(ord_form, data = data)
+  },
+  warning = function(w) {
+    lmer(ord_form, data = data, REML = T,
+         control = lmerControl(optimizer ="Nelder_Mead"))
+  })
+  cont_mod <- tryCatch(expr = {
+    lmer(cont_form, data = data)
+  },
+  warning = function(w) {
+    lmer(cont_form, data = data, REML = T,
+         control = lmerControl(optimizer ="Nelder_Mead"))
+  })
+  priors <- c(as.data.frame(VarCorr(ord_mod))[1:N_pat_effects, "vcov"],
+              as.data.frame(VarCorr(cont_mod))[1:N_pat_effects, "vcov"])
+
+  ## Pass prior matrices
+  if(random_slope) {
+    prior_list = list(prior_int = diag(priors[c(1, 3)]) * N_outcomes,
+                      prior_slope = diag(priors[c(2, 4)]) * N_outcomes,
+                      full = diag(priors) * N_outcomes)
+  } else {
+    prior_list = list(prior_int = diag(priors * N_outcomes))
+  }
+
+  for(i in 2:nsim) {
+    samp_info$num_iter <- i
+
+    ## Regression coefficients
+    vals <- bmrarm_fc_sig_beta(y, X, Z_kron, cur_draws, samp_info)
+    res_beta[, i] <- cur_draws$beta <- vals$beta
+    res_sig[, i] <- cur_draws$sigma <- vals$sig
+
+    # Autoregressive parameter
+    if(samp_info$ar_cov) {
+      vals <- bmrarm_mh_ar(y, X, Z_kron, cur_draws, samp_info)
+      res_ar[i] <- cur_draws$ar <- vals$ar
+      res_accept[i, 2] <- vals$accept
+    }
+
+    ## Subject specific effects
+    vals <- bmrarm_fc_patient(y, z, X, cur_draws, samp_info, prior_list, sep_sig)
+    res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
+    res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
+
+    ## Latent values, missing values, cut points
+    y_cuts <- bmrarm_fc_y_cuts(y, z, X, Z_kron, cur_draws, samp_info)
+    y <-  res_y[,, i] <- y_cuts$y
+    res_cuts[, i] <- cur_draws$cuts <- y_cuts$cuts
+    res_accept[i, 1] <- y_cuts$accept
+
+    ## Update missing values
+    y <- res_y[,, i]<- bmrarm_fc_missing(y, z, X, Z_kron, cur_draws, samp_info)
+
+    ## Cut points
+    if(i %% 150 == 100) plot(res_cuts[4, ], type = "l")
+    if(i %% 150 == 50) plot(res_ar, type = "l")
+    if(i %% 150 == 0) plot(res_pat_sig[1, ], type = "l")
+  }
+
+  sim_use <- seq(burn_in + 1, nsim, by = thin)
+  draws <- list(
+    res_cuts = res_cuts[, sim_use],
+    res_beta = res_beta[, sim_use],
+    res_pat_sig = res_pat_sig[, sim_use],
+    res_ar = res_ar[sim_use],
+    res_sigma = res_sig[, sim_use],
+    res_y = res_y[,, sim_use],
+    res_pat_eff = res_pat_eff[,, sim_use],
+    res_accept = res_accept[sim_use, ],
+    samp_info = samp_info,
+    X = X,
+    Z_kron = Z_kron, z = z)
+  draws
+}
+
+
+#' Full conditional draws of the latent continuous values
+#'
+#' @param y matrix of multivariate observations
+#' @param z matrix of ordinal voutcomes
+#' @param sig covariance matrix for the VAR process
+#' @param sig0 for the initial values
+#' @param M transition matrix for the VAR(1) component
+#' @param cuts current threshold values
+#' @param miss_mat locations of missing values
+#' @param samp_info information for which locations to sample
+#' @param num_iter current iteration number
+#' @import tmvtnorm
+#' @return matrix
+#' @export
+
+bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, sep_sig) {
+
+  ## Generate full sigma matrix
+  N_pat <- samp_info$N_pat
+  sig_alpha_inv <- chol2inv(chol(cur_draws$pat_sig))
+  sig_inv <- chol2inv(chol(cur_draws$sigma))
+  resid_mat <- y - X %*% cur_draws$beta
+  N_pat_eff <- ncol(samp_info$pat_z_kron[[1]])
+
+  ## Sigma inverses only needed is autoregressive covariance matrix
+  if(samp_info$ar_cov) {
+    sig_list <- get_sig_list(cur_draws, samp_info)
+  }
+
+  ## Patient effects
+  res <- matrix(NA, nrow = N_pat, ncol = N_pat_eff)
+
+  for(i in 1:N_pat) {
+    ## Get locations and time matrix for patient
+    locs <- samp_info$pat_locs[[i]]
+    time_ind <- samp_info$pat_time_ind[i]
+    resid_vec <- as.numeric(resid_mat[locs, ])
+    pat_Z <- samp_info$pat_z_kron[[i]]
+
+    ## Patient specific covariance matrix
+    if(samp_info$ar_cov) {
+      pat_sig_inv <- sig_list$sig_inv_list[[time_ind]]
+    } else {
+      pat_sig_inv <- kronecker(sig_inv, diag(rep(1, samp_info$pat_N_obs[[i]])))
+    }
+
+    ## Cross products, covariance, alpha hat
+    Z_sig_prod <- crossprod(pat_Z, pat_sig_inv)
+    post_cov <- chol2inv(chol(Z_sig_prod %*% pat_Z + sig_alpha_inv))
+    post_mean <- post_cov %*% Z_sig_prod %*% resid_vec
+    L <- t(chol(post_cov))
+    res[i, ] <- L %*% rnorm(length(post_mean)) + post_mean
+  }
+
+  ## Correlation matrix
+  sd_inv <- diag(1 / cur_draws$pat_sig_sd)
+  pat_sig_q <- rinvwishart(N_pat + N_pat_eff + 1,
+                           sd_inv %*% crossprod(res) %*% sd_inv +
+                             diag(N_pat_eff))
+
+  # ## SD parameters
+  accept_vec <- rep(0, N_pat_eff)
+  for(i in 1:N_pat_eff) {
+    ## Propose new values
+    cur_draws2 <- cur_draws
+    #cur_draws2$pat_sig_sd[i] <- exp(rnorm(1, log(cur_draws$pat_sig_sd[i]), sd = samp_info$sd_pat_sd[i]))
+    cur_draws2$pat_sig_sd[i] <- rtruncnorm(1, a = 0, b = Inf, mean = cur_draws$pat_sig_sd[i], sd = samp_info$sd_pat_sd[i])
+    cur_draws2$pat_sig <- diag(cur_draws2$pat_sig_sd) %*% pat_sig_q %*% diag(cur_draws2$pat_sig_sd)
+
+    ## Calculate comparison values
+    pat_inv_old <- chol2inv(chol(cur_draws$pat_sig))
+    pat_inv_new <- chol2inv(chol(cur_draws2$pat_sig))
+
+    comp_old <- N_pat / 2 * determinant(pat_inv_old, logarithm = T)[[1]][1] -
+      0.5 * sum(diag(res %*% pat_inv_old %*% t(res)))
+
+    comp_new <- N_pat / 2 * determinant(pat_inv_new, logarithm = T)[[1]][1] -
+      0.5 * sum(diag(res %*% pat_inv_new %*% t(res)))
+    compar_val <- comp_new - comp_old +
+      log(truncnorm::dtruncnorm(cur_draws$pat_sig_sd[i], 0, Inf,
+                                mean = cur_draws2$pat_sig_sd[i],
+                                sd = samp_info$sd_pat_sd[i])) -
+      log(truncnorm::dtruncnorm(cur_draws2$pat_sig_sd[i], 0, Inf,
+                                mean = cur_draws$pat_sig_sd[i],
+                                sd = samp_info$sd_pat_sd[i]))
+
+    if(compar_val >= log(runif(1)) & cur_draws2$pat_sig_sd[i] > 0) {
+      cur_draws$pat_sig_sd[i] <- cur_draws2$pat_sig_sd[i]
+      accept_vec[i] <- 1
+    }
+  }
+  ## SD parameters
+  # accept_vec <- rep(0, N_pat_eff)
+  #
+  # ## Propose new values
+  # cur_draws2 <- cur_draws
+  # cur_draws2$pat_sig_sd <- rnorm(length(cur_draws$pat_sig_sd), cur_draws$pat_sig_sd, sd = samp_info$sd_pat_sd[1])
+  # cur_draws2$pat_sig <- diag(cur_draws2$pat_sig_sd) %*% pat_sig_q %*% diag(cur_draws2$pat_sig_sd)
+  #
+  # ## Calculate comparison values
+  # pat_inv_old <- chol2inv(chol(cur_draws$pat_sig))
+  # pat_inv_new <- chol2inv(chol(cur_draws2$pat_sig))
+  #
+  # comp_old <- N_pat / 2 * determinant(pat_inv_old, logarithm = T)[[1]][1] -
+  #   0.5 * sum(diag(res %*% pat_inv_old %*% t(res)))
+  #
+  # comp_new <- N_pat / 2 * determinant(pat_inv_new, logarithm = T)[[1]][1] -
+  #   0.5 * sum(diag(res %*% pat_inv_new %*% t(res)))
+  # compar_val <- comp_new - comp_old
+  #
+  # if(compar_val >= log(runif(1)) & min(cur_draws2$pat_sig_sd) > 0) {
+  #   cur_draws$pat_sig_sd <- cur_draws2$pat_sig_sd
+  #   accept_vec[1] <- 1
+  # }
+
+  list(pat_effects = res,
+       pat_sig = diag(cur_draws$pat_sig_sd) %*% pat_sig_q %*% diag(cur_draws$pat_sig_sd),
+       pat_sig_sd = cur_draws$pat_sig_sd, accept_vec = accept_vec, pat_sig_q = pat_sig_q)
+}
+
+#' Full conditional draws of the latent continuous values
+#'
+#' @param y matrix of multivariate observations
+#' @param z matrix of ordinal voutcomes
+#' @param sig covariance matrix for the VAR process
+#' @param sig0 for the initial values
+#' @param M transition matrix for the VAR(1) component
+#' @param cuts current threshold values
+#' @param miss_mat locations of missing values
+#' @param samp_info information for which locations to sample
+#' @param num_iter current iteration number
+#' @import tmvtnorm
+#' @return matrix
+#' @export
+
+bmrarm_fc_patient_simp <- function(y, z, X, cur_draws, samp_info, sep_sig) {
+
+  ## Generate full sigma matrix
+  N_pat <- samp_info$N_pat
+  sig_alpha_inv <- chol2inv(chol(cur_draws$pat_sig))
+  sig_inv <- chol2inv(chol(cur_draws$sigma))
+  resid_mat <- y - X %*% cur_draws$beta
+  N_pat_eff <- ncol(samp_info$pat_z_kron[[1]])
+
+  ## Sigma inverses only needed is autoregressive covariance matrix
+  if(samp_info$ar_cov) {
+    sig_list <- get_sig_list(cur_draws, samp_info)
+  }
+
+  ## Patient effects
+  res <- matrix(NA, nrow = N_pat, ncol = N_pat_eff)
+
+  for(i in 1:N_pat) {
+    ## Get locations and time matrix for patient
+    locs <- samp_info$pat_locs[[i]]
+    time_ind <- samp_info$pat_time_ind[i]
+    resid_vec <- as.numeric(resid_mat[locs, ])
+    pat_Z <- samp_info$pat_z_kron[[i]]
+
+    ## Patient specific covariance matrix
+    if(samp_info$ar_cov) {
+      pat_sig_inv <- sig_list$sig_inv_list[[time_ind]]
+    } else {
+      pat_sig_inv <- kronecker(sig_inv, diag(rep(1, samp_info$pat_N_obs[[i]])))
+    }
+
+    ## Cross products, covariance, alpha hat
+    Z_sig_prod <- crossprod(pat_Z, pat_sig_inv)
+    post_cov <- chol2inv(chol(Z_sig_prod %*% pat_Z + sig_alpha_inv))
+    post_mean <- post_cov %*% Z_sig_prod %*% resid_vec
+    L <- t(chol(post_cov))
+    res[i, ] <- L %*% rnorm(length(post_mean)) + post_mean
+  }
+
+  ## Update Correlation matrix
+  sd_mat <- diag(cur_draws$pat_sig_sd)
+  pat_sig <- rinvwishart(N_pat + N_pat_eff + 1, crossprod(res) + 4 * sd_mat)
+
+  ## Update SDs
+  pat_sig_inv <- chol2inv(chol(pat_sig))
+  pat_sig_sd <- 1 / LaplacesDemon::rinvgamma(
+    N_pat_eff, shape = (2 + N_pat_eff) / 2,
+    scale = 2 * diag(pat_sig_inv) + 1 / 100000000
+  )
+
+  list(pat_effects = res,
+       pat_sig = pat_sig,
+       pat_sig_sd = pat_sig_sd)
+}
+
+#' Full conditional draws of the regression coefficients
+#'
+#' @param subject_effects matrix of patient specific intercepts
+#' @param sigma residual covariance matrix
+#' @param prior_alpha prior term for shape
+#' @param prior_alpha prior term for scale
+#' @importFrom LaplacesDemon rinvwishart rmatrixnorm
+#' @export
+
+bmrarm_fc_sig_beta_px <- function(y, X, Z_kron, cur_draws, samp_info) {
+
+  ## Constant
+  N_outcomes <- samp_info$N_outcomes
+  N_covars <- samp_info$N_covars
+
+  ## Mean of patient effects
+  mean_vec <- rowSums(Z_kron * cur_draws$pat_effects[samp_info$pat_idx_long, ])
+  resid_mat <- y - matrix(mean_vec, ncol = N_outcomes)
+
+  ## Calculate posterior covariance matrix
+  cov_vals <- matrix(0, N_covars, N_covars)
+  mean_vals <- matrix(0, nrow = N_covars, ncol = N_outcomes)
+  resid_vals <- matrix(0, N_outcomes, N_outcomes)
+
+  ## Sigma inverses only needed is autoregressive covariance matrix
+  if(samp_info$ar_cov) {
+    sig_list <- get_sig_list(cur_draws, samp_info)
+  }
+
+  for(i in 1:samp_info$N_pat) {
+    ## Get locations, partial residuals after subtracting person effects
+    locs <- samp_info$pat_locs[[i]]
+    X_pat <- samp_info$pat_X[[i]]
+    time_ind <- samp_info$pat_time_ind[i]
+    if(samp_info$ar_cov) {
+      ## Summation of residuals, mean values, and covariance values
+      time_inv <- sig_list$time_inv[[time_ind]]
+      resid_vals <- resid_vals +
+        crossprod(resid_mat[locs, ], time_inv) %*% resid_mat[locs, ]
+      mean_vals <- mean_vals + crossprod(X_pat, time_inv) %*% resid_mat[locs, ]
+      cov_vals <- cov_vals + crossprod(X_pat, time_inv) %*% X_pat
+    } else {
+      ## Summation of residuals, mean values, and covariance values
+      resid_vals <- resid_vals + crossprod(resid_mat[locs, ], resid_mat[locs, ])
+      mean_vals <- mean_vals + crossprod(X_pat, resid_mat[locs, ])
+      cov_vals <- cov_vals + crossprod(X_pat, X_pat)
+    }
+  }
+
+  ## Get posterior draw
+  prior <- diag(rep(0.00001, N_covars))
+  x_inv <- chol2inv(chol(prior + cov_vals))
+  beta_hat <- x_inv %*% mean_vals
+  val <- resid_vals + diag(rep(1, N_outcomes)) - t(mean_vals) %*% beta_hat
+
+  ## Draw updates
+  sig <- rinvwishart(samp_info$N_obs + N_outcomes, val)
+  beta <- rmatrixnorm(M = beta_hat, V = cur_draws$sigma, U = x_inv)
+  beta
+}
+
+
+#' Generate data for longitudinal simulation
+#'
+#' @param N Mean time points per patient, drawn from a poisson
+#' @param N_pat number of patients
+#' @param seed seed to set, default of 10
+#' @importFrom MASS mvrnorm
+#' @import ggplot2
+#' @import dplyr
+#' @importFrom magic adiag
+
+gen_ar_errors_px <- function(N = 7, N_pat = 48, seed = 10, unequal = FALSE,
+                             slope = F, ar_cov = T) {
+  set.seed(seed)
+
+  ## Number of observations
+  if(unequal) {
+    obs_counts <- sample((N - 3):N, size = N_pat, replace = T,
+                         prob = c(0.042, 0.042, 0.083, 0.833))
+  } else {
+    obs_counts <- rep(N, N_pat)
+  }
+  pat_idx <- rep(1:length(obs_counts), times = obs_counts)
+  pat_idx <- c(pat_idx, pat_idx)
+  N_total <- sum(obs_counts)
+
+  ## Additional effects
+  for(i in 1:length(obs_counts)) {
+    if(i == 1) {
+      time_covar <- 0:(obs_counts[i] - 1)
+    } else {
+      time_covar <- c(time_covar, 0:(obs_counts[i] - 1))
+    }
+  }
+  cov_mat <- cbind(1, time_covar)
+  cov_df <- as.data.frame(cov_mat)
+  colnames(cov_df) <- c("intercept", "time")
+
+  beta <- c(0.5, 0.18, 0.05, 0.1)
+  sigma <- matrix(c(1, 0.025,
+                    0.025, 0.13), ncol = 2, byrow = T)
+
+  subject_effects <- subj_slopes <- matrix(NA, ncol = 2, nrow = N_pat)
+
+  sig_alpha <- matrix(c(0.22, 0.075,
+                        0.075, 0.18), ncol = 2, byrow = TRUE)
+  slope_alpha <- matrix(c(0.05, 0.005, 0.005, 0.04), ncol = 2)
+  for(i in 1:N_pat) {
+    subject_effects[i, ] <- mvrnorm(1, mu = rep(0, 2), Sigma = sig_alpha)
+    subj_slopes[i, ] <- mvrnorm(1, mu = rep(0, 2), Sigma = slope_alpha)
+  }
+
+  ## Subject and time indexing
+  ar_val <- c(0.35)
+  y <- true_means <- err_vec <- fixed_means <- rep(NA, N_total * 2)
+  kron_X <- kronecker(diag(rep(1, 2)), cov_mat)
+
+  if(slope) {
+    kron_Z <- kron_X
+    subject_effects <- cbind(subject_effects[, 1], subj_slopes[, 1],
+                             subject_effects[, 2], subj_slopes[, 2])
+  } else {
+    kron_Z <- kron_X[, c(1, 3)]
+  }
+
+  cur_draws <- list(sigma = sigma, ar = ar_val)
+
+  for(i in 1:N_pat) {
+    locs <- which(pat_idx == i)
+    dist_mat <- as.matrix(dist(1:(length(locs) / 2), diag = T, upper = T))
+    if(ar_cov) {
+      dist_mat2 <- exp(-ar_val * dist_mat)
+      dist_mat2 <- ar_val ^ dist_mat
+    } else {
+      dist_mat2 <- diag(1, length(locs) / 2)
+    }
+    sig_full <- kronecker(sigma, dist_mat2)
+    num_locs <- length(locs)
+    fixed_means[locs] <- kron_X[locs, ] %*% beta
+    true_means[locs] <- kron_X[locs, ] %*% beta + kron_Z[locs, ] %*% subject_effects[i, ]
+    #mean_no_int[locs] <- kron_X[locs, ] %*% beta + kron_Z[locs, c(2, 4)] %*% subject_effects[i, c(2, 4)]
+    err_vec[locs] <- MASS::mvrnorm(1, mu = rep(0, length(locs)), Sigma = sig_full)
+    y[locs] <- true_means[locs] + err_vec[locs]
+  }
+  #inv <- solve(t(kron_Z[locs, ]) %*% solve(sig_full) %*% kron_Z[locs, ])
+  #inv %*% t(kron_Z[locs, ]) %*% solve(sig_full) %*% (y[locs] - fixed_means[locs])
+
+  ## Create ordinal values and binary values
+  full <- data.frame(pat_idx, y, outcome = rep(c(1, 2), each = N_total)) %>%
+    group_by(pat_idx, outcome) %>%
+    mutate(obs_num = row_number() - 1)
+  ggplot(full, aes(y, x = obs_num, col = pat_idx, group = pat_idx)) +
+    geom_line() +
+    facet_wrap(.~outcome)
+  cuts <- c(-Inf, 0, 1, 1.5, 1.9, Inf)
+  full$y_ord <- case_when(
+    full$y <= cuts[2] ~ 1,
+    full$y <= cuts[3] ~ 2,
+    full$y <= cuts[4] ~ 3,
+    full$y <= cuts[5]  ~ 4,
+    full$y > cuts[5]  ~ 5
+  )
+
+  ## Check for reasonable counts
+  table(full$y_ord)
+
+  ## Build dataframe
+  N_obs <- sum(full$outcome == 1)
+
+  df <- data.frame(y1 = full$y[full$outcome == 1],
+                   y_ord = full$y_ord[full$outcome == 1],
+                   y2 = full$y[full$outcome == 2],
+                   pat_idx = full$pat_idx[full$outcome == 1],
+                   time = full$obs_num[full$outcome == 1])
+
+  if(slope) {
+    sig_alpha <- magic::adiag(sig_alpha, slope_alpha)
+    sig_alpha <- sig_alpha[c(1, 3, 2, 4), c(1, 3, 2, 4)]
+  }
+
+  ## Include missing values
+  truth <- df
+  df[df$time == 2, c("y_ord")] <- NA
+  df$y_ord[sample(which(df$time > 2), size = 4)] <- NA
+  df$y2[sample(1:nrow(df), size = 9)] <- NA
+
+  list(data = df, sigma_full = sig_full, sigma = sigma,
+       beta = beta, cuts = cuts, X = cov_mat, alpha = subject_effects,
+       sig_alpha = sig_alpha, true_means = true_means, fixed_means = fixed_means,
+       truth = truth, ar = ar_val, err_vec = err_vec)
+}
+
+
+
+#' Full conditional draws of the latent continuous values
+#'
+#' @param y matrix of multivariate observations
+#' @param z matrix of ordinal voutcomes
+#' @param sig covariance matrix for the VAR process
+#' @param sig0 for the initial values
+#' @param M transition matrix for the VAR(1) component
+#' @param cuts current threshold values
+#' @param miss_mat locations of missing values
+#' @param samp_info information for which locations to sample
+#' @param num_iter current iteration number
+#' @import tmvtnorm
+#' @importFrom truncnorm rtruncnorm
+#' @importFrom OpenMx omxMnor
+#' @return matrix
+#' @export
+
+bmrarm_fc_y_cuts_px <- function(y, z, X, Z_kron, cur_draws, samp_info) {
+
+  ## Mean matrix
+  mean_mat <- X %*% cur_draws$beta +
+    matrix(rowSums(Z_kron * cur_draws$pat_effects[samp_info$pat_idx_long, ]),
+           ncol = samp_info$N_outcomes)
+
+  ## Generate full sigma matrix
+  cuts <- cur_draws$cuts
+  N_pat <- samp_info$N_pat
+  N_cat <- samp_info$N_cat
+  N_cuts <- N_cat + 1
+  cuts_tmp <- cuts
+
+  ## Calculate conditional mean for each subject
+  cond_mean <- rep(NA, samp_info$N_obs)
+  if(samp_info$ar_cov) {
+    sig_list <- get_sig_list(cur_draws, samp_info)
+    for(i in 1:N_pat) {
+      ## Locations of vectors to sample
+      locs <- samp_info$pat_locs[[i]]
+      ind <- samp_info$pat_time_ind[i]
+      cond_mean[locs] <- as.numeric(
+        mean_mat[locs, 1] + sig_list$mean_pre_list[[ind]] %*%
+          (as.numeric(y[locs, -1]) - as.numeric(mean_mat[locs, -1])))
+    }
+  } else {
+    ## Conditional means and covariances
+    sig <- cur_draws$sigma
+    pre_calcs <- pre_calc_ar(sig, 1)
+    cond_sd <- sqrt(as.numeric(pre_calcs$cond_cov))
+    cond_mean <- mean_mat[, 1] + as.numeric(pre_calcs$mean_pre) *
+      (as.numeric(y[, -1]) - as.numeric(mean_mat[, -1]))
+  }
+
+  # Update cutpoints --------------------------------------------------------
+
+  if(N_cat > 2) {
+    sd_c <- samp_info$sd_c
+    cuts_vec <- c(-Inf, 0, rep(NA, N_cat - 2), Inf)
+    ## Only update if more than 3 levels
+    if(N_cat >= 3) {
+      for(i in 3:N_cat) {
+        cuts_min <- max(y[which(z == (i - 1))])
+        cuts_max <- min(y[which(z == i)])
+        cuts_vec[i] <- runif(1, cuts_min, cuts_max)
+      }
+    }
+    cuts_tmp <- cuts_vec
+
+    ## Storage of thresholds
+    cuts_low <- cuts_tmp[z]
+    cuts_high <- cuts_tmp[z + 1]
+    cuts_low[is.na(cuts_low)] <- -Inf
+    cuts_high[is.na(cuts_high)] <- Inf
+  } else {
+    cuts_low <- cuts_tmp[z]
+    cuts_high <- cuts_tmp[z + 1]
+    cuts_low[is.na(cuts_low)] <- -Inf
+    cuts_high[is.na(cuts_high)] <- Inf
+  }
+
+  # Update latent values ----------------------------------------------------
+
+  if(samp_info$ar_cov) {
+    for(i in 1:N_pat) {
+      ## Locations of vectors to sample
+      locs <- samp_info$pat_locs[[i]]
+      ind <- samp_info$pat_time_ind[i]
+
+      ## Sample from multivariate truncated normal
+      start_val <- pmax(pmin(cond_mean[locs], cuts_high[locs]), cuts_low[locs])
+      y[locs, 1] <- rtmvnorm(
+        1, mean = cond_mean[locs], H = sig_list$cond_cov_inv_list[[ind]],
+        lower = cuts_low[locs], upper = cuts_high[locs], algorithm = "gibbs",
+        burn.in.samples = 10, start.value = start_val)
+    }
+  } else {
+    N_obs <- length(z)
+    y[1:N_obs, 1] <- rtruncnorm(N_obs, a = cuts_low, b = cuts_high,
+                                mean = cond_mean, sd = cond_sd)
+  }
+  list(y = y, cuts = cuts_tmp, accept = 1)
+}
+
+#' PX-DA MCMC routine to sample from HBMRVAR model
+#'
+#' @param formula an object of class "formula"; a symbolic description of the model to be fitted
+#' @param data a dataframe containing outcome variables, covariates, and a patient or subject identifier
+#' @param ordinal_outcomes a character string containing the names of the ordinal outcomes
+#' @param patient_var name of the patient or subject identifier
+#' @param sig_prior prior variance on the regression coefficients
+#' @param all_draws logical with a default of FALSE which discards burn-in
+#' @param nsim positive integer, number of iterations with default of 1000
+#' @param burn_in positive integer, number of iterations to remove with default of 100. Must be >= 100.
+#' @param thin positive integer, specifiers the period of saving samples. Default of 20 due to the high autocorrelation of the cutpoints
+#' @param seed positive integer, seed for random number generation
+#' @param verbose logical, print iteration number to keep track of progress
+#' @param max_iter_rej maximum number of rejection algorithm attempts for multivariate truncated normal
+#' @return mcmc
+#' @importFrom zoo na.approx
+#' @importFrom fastDummies dummy_cols
+#' @importFrom magic adiag
+#' @importFrom nlme lme VarCorr lmeControl corAR1
+#' @export
+
+baseline_bmr_px <- function(formula, data, ordinal_outcome = c("y_ord"),
+                            time_var = "time", patient_var = "patient_idx",
+                            random_slope = F, ar_cov = TRUE, nsim = 1000,
+                            burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
+                            sig_prior = 1000000000, sd_vec = c(0.15, 0.30),
+                            N_burn_trunc = 5, prior_siw_uni = c(0.5, 2)) {
+
+  ## Create storage
+  set.seed(seed)
+  bmrarm_start(env = environment())
+  cont_out_var <- setdiff(out_vars, ordinal_outcome)
+
+  ## Starting values for ordinal outcome
+  y[1:N_obs, 1] <- 0.5 + res_cuts[z, 1]
+  y[is.infinite(y[, 1]), 1] <- -0.5
+  y[is.na(y[, 1]), 1] <- 0
+
+  ## Starting values for continuous outcomes
+  df <- data.frame(patient = samp_info$pat_idx_long, y = as.numeric(y),
+                   outcome = rep(1:N_outcomes, each = N_obs)) %>%
+    group_by(patient, outcome) %>%
+    mutate(y_interp = na.approx(y, na.rm = FALSE),
+           y_interp = ifelse(!is.na(y_interp), y_interp,
+                             ifelse(row_number() == n(),
+                                    lag(y_interp), lead(y_interp))))
+  y <- matrix(df$y_interp, ncol = N_outcomes)
+  y[is.na(y)] <- 0
+  i <- 2
+  samp_info$burn_in <- burn_in
+  samp_info$max_iter <- 10000000
+
+  ## Emprical bayes priors for the random effects covariance matrix
+  if(random_slope) {
+    rand_form <- as.formula(paste0("~ ", time_var, "|", patient_var))
+  } else {
+    rand_form <- as.formula(paste0("~ 1|", patient_var))
+  }
+
+  ord_form <- reformulate(deparse(formula[[3]]), response = ordinal_outcome)
+  cont_form <- reformulate(deparse(formula[[3]]), response = cont_out_var)
+
+  ## Datasets and structures for models
+  data_ord <- data[!is.na(data[, ordinal_outcome]), ]
+  data_cont <- data[!is.na(data[, cont_out_var]), ]
+  cor_struct <- if(ar_cov) {
+    cor_struct <- corAR1(form = as.formula(~ 1 | pat_idx))
+    #cor_struct <- NULL
+  } else {
+    cor_struct <- NULL
+  }
+
+  ## Fit ordinal model
+  ord_mod <- tryCatch(expr = {
+    lme(ord_form, data = data_ord, random = rand_form, correlation = cor_struct)
+  },
+  error = function(e) {
+    tryCatch(expr = {
+      lme(ord_form, data = data_ord, random = rand_form,
+          correlation = cor_struct, control = lmeControl(opt='optim'))
+    },
+    error = function(e) {
+      ## Resort to no AR structure
+      lme(ord_form, data = data_ord, random = rand_form,
+          control = lmeControl(opt='optim'))
+    })
+  })
+
+  ## Fit continuous model
+  cont_mod <- tryCatch(expr = {
+    lme(cont_form, data = data_cont, random = rand_form,
+        correlation = cor_struct)
+  },
+  error = function(e) {
+    tryCatch(expr = {
+      lme(cont_form, data = data_cont, random = rand_form,
+          correlation = cor_struct, control = lmeControl(opt='optim'))
+    },
+    ## Resort to no AR structure
+    error = function(w) {
+      ## Resort to no AR structure
+      lme(cont_form, data = data_cont, random = rand_form,
+          control = lmeControl(opt='optim'))
+    })
+  })
+
+  ## Pass prior matrices
+  priors <- as.numeric(c(VarCorr(ord_mod)[, 1][1:N_pat_effects],
+                         VarCorr(cont_mod)[, 1][1:N_pat_effects]))
+  prior_mat <- diag(priors)
+  res_accept <- matrix(NA, nsim, 6)
+  cor_mat <- diag(1, 2)
+
+  for(i in 2:nsim) {
+    samp_info$num_iter <- i
+
+    ## Latent values, missing values, cut points
+    y_cuts <- bmrarm_fc_y_cuts_px(y, z, X, Z_kron, cur_draws, samp_info)
+    y <-  res_y[,, i] <- y_cuts$y
+    res_cuts[, i] <- cur_draws$cuts <- y_cuts$cuts
+    res_accept[i, 1] <- y_cuts$accept
+
+    ## Update missing values
+    y <- res_y[,, i]<- bmrarm_fc_missing(y, z, X, Z_kron, cur_draws, samp_info)
+
+    ## Regression coefficients
+    ex_prior <- expansion_prior(cor_mat, N_ordinal = 1)
+    resid <- y - X %*% cur_draws$beta -
+      matrix(rowSums(Z_kron * cur_draws$pat_effects[samp_info$pat_idx_long, ]),
+             ncol = samp_info$N_outcomes)
+    resid_tilde <- resid %*% ex_prior
+    sig_tilde <- rinvwishart(nrow(resid) + 3, crossprod(resid_tilde) + diag(rep(1, 2)))
+    diag_vals <- sqrt(sig_tilde[1, 1])
+    v_half <- diag(c(diag_vals, rep(1, 1)))
+    v_half_inv <- diag(1 / diag(v_half))
+    res_sig[, i] <- cor_mat <- cur_draws$sigma <- v_half_inv %*% sig_tilde %*% v_half_inv
+
+    y2 <- resid_tilde %*% v_half_inv + X %*% cur_draws$beta +
+      matrix(rowSums(Z_kron * cur_draws$pat_effects[samp_info$pat_idx_long, ]),
+             ncol = samp_info$N_outcomes)
+
+    res_beta[, i] <- cur_draws$beta <- bmrarm_fc_sig_beta_px(y, X, Z_kron, cur_draws, samp_info)
+    max(y[, 1][which(z == 1)])
+    min(y[, 1][which(z == 2)])
+
+    max(y2[, 1][which(z == 1)])
+    min(y2[, 1][which(z == 2)])
+
+    max(y2[, 1][which(z == 2)])
+    min(y2[, 1][which(z == 3)])
+
+    max(y2[, 1][which(z == 3)])
+    min(y2[, 1][which(z == 4)])
+
+
+    # Autoregressive parameter
+    if(samp_info$ar_cov) {
+      vals <- bmrarm_mh_ar(y, X, Z_kron, cur_draws, samp_info)
+      cur_draws$ar <- vals$ar
+      res_accept[i, 2] <- vals$accept
+    }
+    res_ar[i] <- cur_draws$ar
+
+    ## Subject specific effects
+    # vals <- bmrarm_fc_patient(y, z, X, cur_draws, samp_info, prior_mat)
+    # res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
+    # res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
+
+    vals <- bmrarm_fc_patient_siw(y, z, X, cur_draws, samp_info, 1, Z_kron, prior_siw_uni)
+    res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
+    res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
+    res_pat_sig_q[,i] <- cur_draws$pat_sig_q <- vals$pat_sig_q
+    res_pat_sig_sd[,i] <- cur_draws$pat_sig_sd <- vals$pat_sig_sd
+    res_accept[i, 3:6] <- vals$accept_vec
+
+    ## Cut points
+    #if(i %% 150 == 100) plot(res_cuts[4, ], type = "l")
+    #if(i %% 150 == 100) plot(res_pat_sig_sd[1, ], type = "l")
+    if(i %% 150 == 50 & i > burn_in) print(round(c(colMeans(res_accept[(burn_in+1):nsim,], na.rm = T), i), 3))
+    if(i %% 150 == 0) plot(res_pat_sig[1, ], type = "l")
+    #plot(res_pat_sig[11, ] / res_sig[1, ], type = "l")
+    #plot(res_cuts[3, ] / sqrt(res_sig[1, ]), type = "l")
+    #plot(res_cuts[4, ] / sqrt(res_sig[1, ]), type = "l")
+  }
+
+  sim_use <- seq(burn_in + 1, nsim, by = thin)
+  draws <- list(
+    res_cuts = res_cuts[, sim_use],
+    res_beta = res_beta[, sim_use],
+    res_pat_sig = res_pat_sig[, sim_use],
+    res_pat_sig_q = res_pat_sig_q[, sim_use],
+    res_pat_sig_sd = res_pat_sig_sd[, sim_use],
+    res_ar = res_ar[sim_use],
+    res_sigma = res_sig[, sim_use],
+    res_y = res_y[,, sim_use],
+    res_pat_eff = res_pat_eff[,, sim_use],
+    res_accept = res_accept[sim_use, ],
+    samp_info = samp_info,
+    X = X,
+    Z_kron = Z_kron, z = z,
+    priors = priors)
+  draws
+}
+
+#' PX-DA MCMC routine to sample from HBMRVAR model
+#'
+#' @param formula an object of class "formula"; a symbolic description of the model to be fitted
+#' @param data a dataframe containing outcome variables, covariates, and a patient or subject identifier
+#' @param ordinal_outcomes a character string containing the names of the ordinal outcomes
+#' @param patient_var name of the patient or subject identifier
+#' @param sig_prior prior variance on the regression coefficients
+#' @param all_draws logical with a default of FALSE which discards burn-in
+#' @param nsim positive integer, number of iterations with default of 1000
+#' @param burn_in positive integer, number of iterations to remove with default of 100. Must be >= 100.
+#' @param thin positive integer, specifiers the period of saving samples. Default of 20 due to the high autocorrelation of the cutpoints
+#' @param seed positive integer, seed for random number generation
+#' @param verbose logical, print iteration number to keep track of progress
+#' @param max_iter_rej maximum number of rejection algorithm attempts for multivariate truncated normal
+#' @return mcmc
+#' @importFrom zoo na.approx
+#' @importFrom fastDummies dummy_cols
+#' @importFrom magic adiag
+#' @importFrom nlme lme VarCorr lmeControl corAR1
+#' @export
+
+baseline_bmr_old <- function(formula, data, ordinal_outcome = c("y_ord"),
+                             time_var = "time", patient_var = "patient_idx",
+                             random_slope = F, ar_cov = TRUE, nsim = 1000,
+                             burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
+                             sig_prior = 1000000000, sd_vec = c(0.15, 0.30),
+                             N_burn_trunc = 5) {
+
+  ## Create storage
+  set.seed(seed)
+  bmrarm_start(env = environment())
+  cont_out_var <- setdiff(out_vars, ordinal_outcome)
+
+  ## Starting values for ordinal outcome
+  y[1:N_obs, 1] <- 0.5 + res_cuts[z, 1]
+  y[is.infinite(y[, 1]), 1] <- -0.5
+  y[is.na(y[, 1]), 1] <- 0
+
+  ## Starting values for continuous outcomes
+  df <- data.frame(patient = samp_info$pat_idx_long, y = as.numeric(y),
+                   outcome = rep(1:N_outcomes, each = N_obs)) %>%
+    group_by(patient, outcome) %>%
+    mutate(y_interp = na.approx(y, na.rm = FALSE),
+           y_interp = ifelse(!is.na(y_interp), y_interp,
+                             ifelse(row_number() == n(),
+                                    lag(y_interp), lead(y_interp))))
+  y <- matrix(df$y_interp, ncol = N_outcomes)
+  y[is.na(y)] <- 0
+  i <- 2
+  samp_info$burn_in <- burn_in
+  samp_info$max_iter <- 10000000
+
+  ## Emprical bayes priors for the random effects covariance matrix
+  if(random_slope) {
+    rand_form <- as.formula(paste0("~ ", time_var, "|", patient_var))
+  } else {
+    rand_form <- as.formula(paste0("~ 1|", patient_var))
+  }
+
+  ord_form <- reformulate(deparse(formula[[3]]), response = ordinal_outcome)
+  cont_form <- reformulate(deparse(formula[[3]]), response = cont_out_var)
+
+  ## Datasets and structures for models
+  data_ord <- data[!is.na(data[, ordinal_outcome]), ]
+  data_cont <- data[!is.na(data[, cont_out_var]), ]
+  cor_struct <- if(ar_cov) {
+    cor_struct <- corAR1(form = as.formula(~ 1 | pat_idx))
+  } else {
+    cor_struct <- NULL
+  }
+
+  ## Fit ordinal model
+  ord_mod <- tryCatch(expr = {
+    lme(ord_form, data = data_ord, random = rand_form, correlation = cor_struct)
+  },
+  error = function(e) {
+    tryCatch(expr = {
+      lme(ord_form, data = data_ord, random = rand_form,
+          correlation = cor_struct, control = lmeControl(opt='optim'))
+    },
+    error = function(e) {
+      ## Resort to no AR structure
+      lme(ord_form, data = data_ord, random = rand_form,
+          control = lmeControl(opt='optim'))
+    })
+  })
+
+  ## Fit continuous model
+  cont_mod <- tryCatch(expr = {
+    lme(cont_form, data = data_cont, random = rand_form,
+        correlation = cor_struct)
+  },
+  error = function(e) {
+    tryCatch(expr = {
+      lme(cont_form, data = data_cont, random = rand_form,
+          correlation = cor_struct, control = lmeControl(opt='optim'))
+    },
+    ## Resort to no AR structure
+    error = function(w) {
+      ## Resort to no AR structure
+      lme(cont_form, data = data_cont, random = rand_form,
+          control = lmeControl(opt='optim'))
+    })
+  })
+
+  ## Pass prior matrices
+  priors <- as.numeric(c(VarCorr(ord_mod)[, 1][1:N_pat_effects],
+                         VarCorr(cont_mod)[, 1][1:N_pat_effects]))
+  prior_mat <- diag(priors) * length(priors)
+
+  for(i in 2:nsim) {
+    samp_info$num_iter <- i
+
+    ## Regression coefficients
+    vals <- bmrarm_fc_sig_beta(y, X, Z_kron, cur_draws, samp_info)
+    res_beta[, i] <- cur_draws$beta <- vals$beta
+    res_sig[, i] <- cur_draws$sigma <- vals$sig
+
+    # Autoregressive parameter
+    if(samp_info$ar_cov) {
+      vals <- bmrarm_mh_ar(y, X, Z_kron, cur_draws, samp_info)
+      cur_draws$ar <- vals$ar
+      res_accept[i, 2] <- vals$accept
+    }
+    res_ar[i] <- cur_draws$ar
+
+    ## Subject specific effects
+    vals <- bmrarm_fc_patient(y, z, X, cur_draws, samp_info, prior_mat)
+    res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
+    res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
+
+    ## Latent values, missing values, cut points
+    y_cuts <- bmrarm_fc_y_cuts(y, z, X, Z_kron, cur_draws, samp_info)
+    y <-  res_y[,, i] <- y_cuts$y
+    res_cuts[, i] <- cur_draws$cuts <- y_cuts$cuts
+    res_accept[i, 1] <- y_cuts$accept
+
+    ## Update missing values
+    y <- res_y[,, i]<- bmrarm_fc_missing(y, z, X, Z_kron, cur_draws, samp_info)
+
+    ## Cut points
+    if(i %% 150 == 100) plot(res_cuts[4, ], type = "l")
+    if(i %% 150 == 50 & i > burn_in) print(colMeans(res_accept[(burn_in+1):nsim,], na.rm = T))
+    if(i %% 150 == 0) plot(res_pat_sig[1, ], type = "l")
+  }
+
+  sim_use <- seq(burn_in + 1, nsim, by = thin)
+  draws <- list(
+    res_cuts = res_cuts[, sim_use],
+    res_beta = res_beta[, sim_use],
+    res_pat_sig = res_pat_sig[, sim_use],
+    res_ar = res_ar[sim_use],
+    res_sigma = res_sig[, sim_use],
+    res_y = res_y[,, sim_use],
+    res_pat_eff = res_pat_eff[,, sim_use],
+    res_accept = res_accept[sim_use, ],
+    samp_info = samp_info,
+    X = X,
+    Z_kron = Z_kron, z = z)
+  draws
+}
+
+#' PX-DA MCMC routine to sample from HBMRVAR model
+#'
+#' @param formula an object of class "formula"; a symbolic description of the model to be fitted
+#' @param data a dataframe containing outcome variables, covariates, and a patient or subject identifier
+#' @param ordinal_outcomes a character string containing the names of the ordinal outcomes
+#' @param patient_var name of the patient or subject identifier
+#' @param sig_prior prior variance on the regression coefficients
+#' @param all_draws logical with a default of FALSE which discards burn-in
+#' @param nsim positive integer, number of iterations with default of 1000
+#' @param burn_in positive integer, number of iterations to remove with default of 100. Must be >= 100.
+#' @param thin positive integer, specifiers the period of saving samples. Default of 20 due to the high autocorrelation of the cutpoints
+#' @param seed positive integer, seed for random number generation
+#' @param verbose logical, print iteration number to keep track of progress
+#' @param max_iter_rej maximum number of rejection algorithm attempts for multivariate truncated normal
+#' @return bmrarm
+#' @importFrom loo kfold_split_stratified
+#' @export
+
+bmr_cv <- function(formula, data, ordinal_outcome = c("y_ord"),
+                   time_var = "time", patient_var = "patient_idx",
+                   random_slope = F, ar_cov = TRUE, nsim = 1000,
+                   burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
+                   sig_prior = 1000000000, sd_vec = c(0.15, 0.30)) {
+
+  ## Long version of dataset
+  full_X <- model.matrix.lm(as.formula(formula), data = data, na.action = "na.pass")
+  out_vars <- setdiff(all.vars(formula), colnames(full_X))
+  cont_out_var <- setdiff(out_vars, ordinal_outcome)
+  data$row_num <- 1:nrow(data)
+  data$pat_idx_num <- dense_rank(data$pat_idx)
+  data$time <- data[, time_var]
+
+  ## Extract matrices for multiplication of random effects
+  full_Z <- matrix(rep(1, nrow(data)), ncol = 1)
+  if (random_slope) {
+    full_Z <- cbind(full_Z, full_X[, time_var, drop = FALSE])
+  }
+  full_Z_kron <- kronecker(diag(rep(1, length(out_vars))), full_Z)
+
+  ## Max number of observations
+  max_obs <- data %>%
+    group_by(pat_idx) %>%
+    summarise(N = n()) %>%
+    ungroup() %>%
+    select(N) %>%
+    unlist() %>%
+    max()
+
+  ## Folds
+  set.seed(seed)
+  folds <- kfold_split_stratified(max(max_obs, 10), data$pat_idx)
+  data$folds <- folds
+  cv_mat <- matrix(NA, nrow = nrow(data), ncol = length(out_vars))
+  z_true = data[, ordinal_outcome]
+  y_true <- data[, cont_out_var]
+  i <- 1
+
+  for(i in 1:max(folds)) {
+    data_tmp <- data
+    cv_locs <- which(data$folds == i)
+    data_tmp <- data[data$folds != i, ]
+    samps <- baseline_bmr(formula = formula, data = data_tmp,
+                          ordinal_outcome = ordinal_outcome,
+                          patient_var = patient_var,
+                          random_slope = random_slope,
+                          time_var = time_var, ar_cov = ar_cov,
+                          burn_in = burn_in, nsim = nsim, thin = thin,
+                          seed = seed,
+                          sd_vec = sd_vec)
+
+    if(!ar_cov) samps$res_ar[] <- 0
+    cv_mat[cv_locs, 1] <- get_loocv(samps, cv_locs, z_true, y_true, full_X,
+                                    full_Z_kron, data, ar = ar_cov)
+
+    print(i)
+    print(colMeans(samps$res_accept))
+    print(sum(cv_mat[, 1], na.rm = T) * 2)
+  }
+
+  list(cv_vals = cv_mat[, 1], sum_cv_vals = sum(cv_mat[, 1]))
+}
+
+#' PX-DA MCMC routine to sample from HBMRVAR model
+#'
+#' @param formula an object of class "formula"; a symbolic description of the model to be fitted
+#' @param data a dataframe containing outcome variables, covariates, and a patient or subject identifier
+#' @param ordinal_outcomes a character string containing the names of the ordinal outcomes
+#' @param patient_var name of the patient or subject identifier
+#' @param sig_prior prior variance on the regression coefficients
+#' @param all_draws logical with a default of FALSE which discards burn-in
+#' @param nsim positive integer, number of iterations with default of 1000
+#' @param burn_in positive integer, number of iterations to remove with default of 100. Must be >= 100.
+#' @param thin positive integer, specifiers the period of saving samples. Default of 20 due to the high autocorrelation of the cutpoints
+#' @param seed positive integer, seed for random number generation
+#' @param verbose logical, print iteration number to keep track of progress
+#' @param max_iter_rej maximum number of rejection algorithm attempts for multivariate truncated normal
+#' @return mcmc
+#' @importFrom zoo na.approx
+#' @importFrom fastDummies dummy_cols
+#' @importFrom magic adiag
+#' @export
+
+baseline_bmr_test <- function(formula, data, ordinal_outcome = c("y_ord"),
+                              time_var = "time", patient_var = "patient_idx",
+                              random_slope = F, ar_cov = TRUE, nsim = 1000,
+                              burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
+                              sig_prior = 1000000000, sd_vec = c(0.15, 0.05),
+                              which_fc = c(T, T, T, T, T), base0 = F) {
+
+  ## Create storage
+  set.seed(seed)
+  bmrarm_start(env = environment())
+
+  ## Starting values for ordinal outcome
+  y[1:N_obs, 1] <- 0.5 + res_cuts[z, 1]
+  y[is.infinite(y[, 1]), 1] <- -0.5
+  y[is.na(y[, 1]), 1] <- 0
+
+  ## Starting values for continuous outcomes
+  df <- data.frame(patient = samp_info$pat_idx_long, y = as.numeric(y),
+                   outcome = rep(1:N_outcomes, each = N_obs)) %>%
+    group_by(patient, outcome) %>%
+    mutate(y_interp = na.approx(y, na.rm = FALSE),
+           y_interp = ifelse(!is.na(y_interp), y_interp,
+                             ifelse(row_number() == n(),
+                                    lag(y_interp), lead(y_interp))))
+  y <- matrix(df$y_interp, ncol = N_outcomes)
+  y[is.na(y)] <- 0
+  i <- 2
+  cur_draws$beta <- matrix(as.numeric(sim_data$beta), 2)
+  cur_draws$sigma <- sim_data$sigma
+  cur_draws$ar <- sim_data$ar
+  if(base0) cur_draws$ar <- 0
+  cur_draws$pat_effects <- sim_data$alpha
+  cur_draws$pat_sig <- sim_data$sig_alpha
+  cur_draws$cuts <- sim_data$cuts
+  samp_info$burn_in <- burn_in
+  samp_info$max_iter <- 10000000
+  y <- cbind(sim_data$truth$y1, sim_data$truth$y2)
+  for(i in 2:nsim) {
+    samp_info$num_iter <- i
+
+    ## Regression coefficients
+    if(which_fc[1]) {
+      vals <- bmrarm_fc_sig_beta(y, X, Z_kron, cur_draws, samp_info)
+      #print("sb")
+      res_beta[, i] <- cur_draws$beta <- vals$beta
+      res_sig[, i] <- cur_draws$sigma <- vals$sig
+    } else {
+      res_beta[, i] <- cur_draws$beta
+      res_sig[, i] <- cur_draws$sigma
+    }
+
+    # Autoregressive parameter
+    if(samp_info$ar_cov & which_fc[2]) {
+      vals <- bmrarm_mh_ar(y, X, Z_kron, cur_draws, samp_info)
+      #print("ar")
+      res_ar[i] <- cur_draws$ar <- vals$ar
+      res_accept[i, 2] <- vals$accept
+      #cur_draws$ar <- 0
+    } else {
+      res_ar[i] <- cur_draws$ar
+    }
+
+    ## Subject specific effects
+    if(which_fc[3]) {
+      vals <- bmrarm_fc_patient(y, z, X, cur_draws, samp_info)
+      #print("pat")
+      res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
+      res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
+      #res_pat_sig[, i] <- cur_draws$pat_sig
+    } else {
+      res_pat_sig[, i] <- cur_draws$pat_sig
+      res_pat_eff[,, i] <- cur_draws$pat_effects
+    }
+
+    ## Latent values, missing values, cut points
+    if(which_fc[4]) {
+      y_cuts <- bmrarm_fc_y_cuts(y, z, X, Z_kron, cur_draws, samp_info)
+      #print("y")
+      y <-  res_y[,, i] <- y_cuts$y
+      res_cuts[, i] <- cur_draws$cuts <- y_cuts$cuts
+      res_accept[i, 1] <- y_cuts$accept
+    } else {
+      res_y[,, i] <- y
+      res_cuts[, i] <- cur_draws$cuts
+    }
+
+    ## Update missing values
+    if(which_fc[5]) {
+      y <- res_y[,, i]<- bmrarm_fc_missing(y, z, X, Z_kron, cur_draws, samp_info)
+    }
+    #print("miss")
+
+    ## Cut points
+    if(i %% 50 == 0) print(i)
+    #if(i %% 100 == 50) plot(res_cuts[4, ], type = "l")
+    if(i %% 100 == 50) plot(res_ar, type = "l")
+    if(i %% 100 == 0) plot(res_sig[4, ], type = "l")
+  }
+
+  sim_use <- seq(burn_in + 1, nsim, by = thin)
+  draws <- list(
+    res_cuts = res_cuts[, sim_use],
+    res_beta = res_beta[, sim_use],
+    res_pat_sig = res_pat_sig,
+    res_ar = res_ar[sim_use],
+    res_sigma = res_sig[, sim_use],
+    res_y = res_y[,, sim_use],
+    res_pat_eff = res_pat_eff[,, sim_use],
+    samp_info = samp_info,
+    X = X,
+    Z_kron = Z_kron, z = z)
+  draws
+}
+
+#' PX-DA MCMC routine to sample from HBMRVAR model
+#'
+#' @param formula an object of class "formula"; a symbolic description of the model to be fitted
+#' @param data a dataframe containing outcome variables, covariates, and a patient or subject identifier
+#' @param ordinal_outcomes a character string containing the names of the ordinal outcomes
+#' @param patient_var name of the patient or subject identifier
+#' @param sig_prior prior variance on the regression coefficients
+#' @param all_draws logical with a default of FALSE which discards burn-in
+#' @param nsim positive integer, number of iterations with default of 1000
+#' @param burn_in positive integer, number of iterations to remove with default of 100. Must be >= 100.
+#' @param thin positive integer, specifiers the period of saving samples. Default of 20 due to the high autocorrelation of the cutpoints
+#' @param seed positive integer, seed for random number generation
+#' @param verbose logical, print iteration number to keep track of progress
+#' @param max_iter_rej maximum number of rejection algorithm attempts for multivariate truncated normal
+#' @return mcmc
+#' @importFrom zoo na.approx
+#' @importFrom fastDummies dummy_cols
+#' @importFrom magic adiag
+#' @importFrom nlme lme VarCorr lmeControl corAR1
+#' @export
+
+baseline_bmr <- function(formula, data, ordinal_outcome = c("y_ord"),
+                         time_var = "time", patient_var = "patient_idx",
+                         random_slope = F, ar_cov = TRUE, nsim = 1000,
+                         burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
+                         sig_prior = 1000000000, sd_vec = c(0.15, 0.30),
+                         N_burn_trunc = 5, prior_siw_uni = c(0.2, 5)) {
+
+  ## Create storage
+  set.seed(seed)
+  bmrarm_start(env = environment())
+  cont_out_var <- setdiff(out_vars, ordinal_outcome)
+
+  ## Starting values for ordinal outcome
+  y[1:N_obs, 1] <- 0.5 + res_cuts[z, 1]
+  y[is.infinite(y[, 1]), 1] <- -0.5
+  y[is.na(y[, 1]), 1] <- 0
+
+  ## Starting values for continuous outcomes
+  df <- data.frame(patient = samp_info$pat_idx_long, y = as.numeric(y),
+                   outcome = rep(1:N_outcomes, each = N_obs)) %>%
+    group_by(patient, outcome) %>%
+    mutate(y_interp = na.approx(y, na.rm = FALSE),
+           y_interp = ifelse(!is.na(y_interp), y_interp,
+                             ifelse(row_number() == n(),
+                                    lag(y_interp), lead(y_interp))))
+  y <- matrix(df$y_interp, ncol = N_outcomes)
+  y[is.na(y)] <- 0
+  i <- 2
+  samp_info$burn_in <- burn_in
+  samp_info$max_iter <- 10000000
+
+  ## Emprical bayes priors for the random effects covariance matrix
+  if(random_slope) {
+    rand_form <- as.formula(paste0("~ ", time_var, "|", patient_var))
+  } else {
+    rand_form <- as.formula(paste0("~ 1|", patient_var))
+  }
+
+  ord_form <- reformulate(deparse(formula[[3]]), response = ordinal_outcome)
+  cont_form <- reformulate(deparse(formula[[3]]), response = cont_out_var)
+
+  ## Datasets and structures for models
+  data_ord <- data[!is.na(data[, ordinal_outcome]), ]
+  data_cont <- data[!is.na(data[, cont_out_var]), ]
+  cor_struct <- if(ar_cov) {
+    cor_struct <- corAR1(form = as.formula(~ 1 | pat_idx))
+    #cor_struct <- NULL
+  } else {
+    cor_struct <- NULL
+  }
+
+  ## Fit ordinal model
+  ord_mod <- tryCatch(expr = {
+    lme(ord_form, data = data_ord, random = rand_form, correlation = cor_struct)
+  },
+  error = function(e) {
+    tryCatch(expr = {
+      lme(ord_form, data = data_ord, random = rand_form,
+          correlation = cor_struct, control = lmeControl(opt='optim'))
+    },
+    error = function(e) {
+      ## Resort to no AR structure
+      lme(ord_form, data = data_ord, random = rand_form,
+          control = lmeControl(opt='optim'))
+    })
+  })
+
+  ## Fit continuous model
+  cont_mod <- tryCatch(expr = {
+    lme(cont_form, data = data_cont, random = rand_form,
+        correlation = cor_struct)
+  },
+  error = function(e) {
+    tryCatch(expr = {
+      lme(cont_form, data = data_cont, random = rand_form,
+          correlation = cor_struct, control = lmeControl(opt='optim'))
+    },
+    ## Resort to no AR structure
+    error = function(w) {
+      ## Resort to no AR structure
+      lme(cont_form, data = data_cont, random = rand_form,
+          control = lmeControl(opt='optim'))
+    })
+  })
+
+  ## Pass prior matrices
+  priors <- as.numeric(c(VarCorr(ord_mod)[, 1][1:N_pat_effects],
+                         VarCorr(cont_mod)[, 1][1:N_pat_effects]))
+  prior_mat <- diag(priors)
+  res_accept <- matrix(NA, nsim, 6)
+
+  for(i in 2:nsim) {
+    samp_info$num_iter <- i
+
+    ## Regression coefficients
+    vals <- bmrarm_fc_sig_beta(y, X, Z_kron, cur_draws, samp_info)
+    res_beta[, i] <- cur_draws$beta <- vals$beta
+    res_sig[, i] <- cur_draws$sigma <- vals$sig
+
+    # Autoregressive parameter
+    if(samp_info$ar_cov) {
+      vals <- bmrarm_mh_ar(y, X, Z_kron, cur_draws, samp_info)
+      cur_draws$ar <- vals$ar
+      res_accept[i, 2] <- vals$accept
+    }
+    res_ar[i] <- cur_draws$ar
+
+    ## Subject specific effects
+    # vals <- bmrarm_fc_patient(y, z, X, cur_draws, samp_info, prior_mat)
+    # res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
+    # res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
+
+    vals <- bmrarm_fc_patient_siw(y, z, X, cur_draws, samp_info, 1, Z_kron, prior_siw_uni)
+    res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
+    res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
+    res_pat_sig_q[,i] <- cur_draws$pat_sig_q <- vals$pat_sig_q
+    res_pat_sig_sd[,i] <- cur_draws$pat_sig_sd <- vals$pat_sig_sd
+    res_accept[i, 3:6] <- vals$accept_vec
+
+    ## Latent values, missing values, cut points
+    y_cuts <- bmrarm_fc_y_cuts(y, z, X, Z_kron, cur_draws, samp_info)
+    y <-  res_y[,, i] <- y_cuts$y
+    res_cuts[, i] <- cur_draws$cuts <- y_cuts$cuts
+    res_accept[i, 1] <- y_cuts$accept
+
+    ## Update missing values
+    y <- res_y[,, i]<- bmrarm_fc_missing(y, z, X, Z_kron, cur_draws, samp_info)
+
+    ## Cut points
+    #if(i %% 150 == 100) plot(res_cuts[4, ], type = "l")
+    #if(i %% 150 == 100) plot(res_pat_sig_sd[1, ], type = "l")
+    if(i %% 150 == 50 & i > burn_in) print(round(c(colMeans(res_accept[(burn_in+1):nsim,], na.rm = T), i), 3))
+    if(i %% 150 == 0) plot(res_pat_sig[1, ], type = "l")
+  }
+
+  sim_use <- seq(burn_in + 1, nsim, by = thin)
+  draws <- list(
+    res_cuts = res_cuts[, sim_use],
+    res_beta = res_beta[, sim_use],
+    res_pat_sig = res_pat_sig[, sim_use],
+    res_pat_sig_q = res_pat_sig_q[, sim_use],
+    res_pat_sig_sd = res_pat_sig_sd[, sim_use],
+    res_ar = res_ar[sim_use],
+    res_sigma = res_sig[, sim_use],
+    res_y = res_y[,, sim_use],
+    res_pat_eff = res_pat_eff[,, sim_use],
+    res_accept = res_accept[sim_use, ],
+    samp_info = samp_info,
+    X = X,
+    Z_kron = Z_kron, z = z,
+    priors = priors)
+  draws
+}
+
+#' Full conditional draws of the latent continuous values
+#'
+#' @param y matrix of multivariate observations
+#' @param z matrix of ordinal voutcomes
+#' @param sig covariance matrix for the VAR process
+#' @param sig0 for the initial values
+#' @param M transition matrix for the VAR(1) component
+#' @param cuts current threshold values
+#' @param miss_mat locations of missing values
+#' @param samp_info information for which locations to sample
+#' @param num_iter current iteration number
+#' @return matrix
+#' @export
+
+fc_y_old <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter, fast) {
+
+  ## Current parameter values
+  N_ord <- samp_info$num_ord
+  N_cont <- samp_info$N_response - N_ord
+  ord_loc <- 1:N_ord
+  sig <- tmp_list$sigma
+  M <- tmp_list$M
+  cuts <- tmp_list$cuts
+
+  ## Constants of interest
+  num_ord <- samp_info$num_ord
+  rej_iters_vec <- vector(length = samp_info$N_obs)
+
+  ## Commonly used inverses
+  sig_inv <- chol2inv(chol(sig))
+  ms_cross <- crossprod(M, sig_inv)
+  msm <- ms_cross %*% M
+
+  ## Conditional normal when t = 1 to T-1
+  c_mat_def <- chol2inv(chol(sig_inv + msm))
+  ms0_cross <- ms_cross[ord_loc, , drop = FALSE]
+  c_mat0 <- chol2inv(chol(diag(N_ord) + ms0_cross %*% M[, ord_loc, drop = FALSE]))
+
+  ## Pre calculation based on locations that need to be sampled
+  final_mats <- pre_calc(sig, samp_info$samp_locs)
+  default_mats <- pre_calc(c_mat_def, samp_info$samp_locs)
+
+  for(i in 1:samp_info$N_obs) {
+    ## Locations needed for sampling
+    iter_samp_type <- samp_info$samp_type[[i]]
+    iter_locs <- samp_info$samp_locs[[iter_samp_type]]
+    iter_length <- samp_info$samp_length[[iter_samp_type]]
+
+    ## Storage for thresholds
+    cuts_low <- rep(-Inf, length = iter_length)
+    cuts_high <- rep(Inf, length = iter_length)
+
+    ## Find threshold vectors
+    for(j in 1:num_ord) {
+      if(miss_mat[i, j] == 0) {
+        cuts_low[j] <- cuts[, , j][z[i, j]]
+        cuts_high[j] <- cuts[, , j][z[i, j] + 1]
+      }
+    }
+
+    ## Mean and covariance depend on if the obs is the first, last, or other
+    if (i == 1) {
+      d_vec <- c(c_mat0 %*% ms0_cross %*% (
+        y[, i + 1] - mean_mat[, i + 1] -
+          M[, -(ord_loc), drop = FALSE]  %*% y[-(ord_loc), i, drop = F]
+      ), rep(0, N_cont))
+      #pre_calcs <- baseline_mats[[iter_samp_type]]
+      pre_calcs <- list(
+        mean_pre = matrix(0, nrow = N_ord, ncol = N_cont),
+        cond_cov = c_mat0,
+        cond_chol_mat = t(chol(c_mat0)),
+        cond_chol_inv = chol2inv(chol(c_mat0)))
+      if(N_ord == 1) {
+        pre_calcs$cond_cov <- sqrt(c_mat0)
+      }
+    } else if (i == samp_info$N_obs) {
+      d_vec <- mean_mat[, i] + M %*% y[, i - 1]
+      pre_calcs <- final_mats[[iter_samp_type]]
+    } else {
+      d_vec <- c_mat_def %*% (sig_inv %*% (mean_mat[, i] + M %*% y[, i - 1]) +
+                                ms_cross %*% (y[, i + 1] - mean_mat[, i + 1]))
+      pre_calcs <- default_mats[[iter_samp_type]]
+    }
+
+    ## Store results
+    if (fast) {
+      y[iter_locs, i] <- tmvn_gibbs_rej_fast(
+        y_current = y[, i], mean = d_vec, lower = cuts_low,
+        upper = cuts_high, locs = iter_locs, loc_length = iter_length,
+        pre_calcs = pre_calcs, max_iter = samp_info$max_iter, N_ord = num_ord,
+        burn_in = samp_info$burn_in, num_iter = num_iter, num_obs = i)
+    } else {
+      y[iter_locs, i] <- tmvn_gibbs_rej(
+        y_current = y[, i], mean = d_vec, lower = cuts_low,
+        upper = cuts_high, locs = iter_locs, loc_length = iter_length,
+        pre_calcs = pre_calcs, max_iter = samp_info$max_iter, N_ord = num_ord,
+        burn_in = samp_info$burn_in, num_iter = num_iter, num_obs = i)
+    }
+  }
+  t(y)
+}
+
+#' Get DIC
+#'
+#' @param y_current current continous outcome values
+#' @param mean_vec vector of mean values
+#' @param pre_calc_mat a pre-calculated matrix
+#' @param ord_loc number of ordinal outcomes
+#' @importFrom mvtnorm dmvnorm
+#' @return scalar
+
+get_loocv <- function(samps, cv_locs, z_true, y_true, full_X, full_Z_kron,
+                      data, ar = FALSE) {
+
+  N_outcomes <- samps$samp_info$N_outcomes
+  if(!ar) {
+    z <- z_true[cv_locs]
+    y <- y_true[cv_locs]
+    miss_mat <- is.na(cbind(z_true, y_true))[cv_locs, ]
+    pat_idx <- data$pat_idx[cv_locs]
+    pat_idx_long <- c(pat_idx, pat_idx)
+    X <- full_X[cv_locs, ]
+    Z_kron <- full_Z_kron[c(cv_locs, cv_locs + nrow(data)), ]
+  } else {
+    z <- z_true
+    miss_mat <- is.na(cbind(z_true, y_true))
+    pat_idx <- data$pat_idx
+    pat_idx_long <- c(pat_idx, pat_idx)
+    X <- full_X
+    Z_kron <- full_Z_kron
+    y_full <- matrix(NA, ncol = N_outcomes, nrow = nrow(data))
+    y_full[cv_locs, 2] <- y_true[cv_locs]
+  }
+
+  ## Calculate mean deviance
+  all_lppd <- sapply(1:ncol(samps$res_beta), function(x){
+    beta <- matrix(samps$res_beta[, x], ncol = N_outcomes)
+    pat_eff <- samps$res_pat_eff[,, x]
+    cuts <- samps$res_cuts[, x]
+    sigma <- matrix(samps$res_sigma[, x], ncol = N_outcomes)
+
+    if(!ar) {
+      get_lppd(
+        y, X, z, Z_kron, pat_idx, pat_idx_long,
+        beta, sigma, cuts, pat_eff = pat_eff, miss_mat, cv_locs)
+    } else {
+      y_full[-cv_locs,] <- samps$res_y[,, x]
+      ar_val <- samps$res_ar[x]
+
+      get_lppd_ar(
+        y = y_full, X, z, Z_kron, pat_idx, pat_idx_long,
+        beta, sigma, cuts, pat_eff, miss_mat,
+        samp_info = samps$samp_info, cv_locs, ar_val, data)
+    }
+  })
+  log(rowMeans(all_lppd))
+}
+
+#' Get DIC
+#'
+#' @param y_current current continous outcome values
+#' @param mean_vec vector of mean values
+#' @param pre_calc_mat a pre-calculated matrix
+#' @param ord_loc number of ordinal outcomes
+#' @importFrom mvtnorm dmvnorm
+#' @return scalar
+
+get_lppd <- function(y, X, z, Z_kron, pat_idx, pat_idx_long, beta, sigma,
+                     cuts, pat_eff, miss_mat, samp_info, cv_locs) {
+
+  mean_vec <- as.numeric(X %*% beta) + rowSums(Z_kron * pat_eff[pat_idx_long, ])
+  mean_mat <- matrix(mean_vec, ncol = 2)
+
+  ## Calculate cuts
+  cuts_low <- cuts[z]
+  cuts_low[is.na(cuts_low)] <- -Inf
+  cuts_high <- cuts[c(z + 1)]
+  cuts_high[is.na(cuts_high)] <- Inf
+
+  ## Conditional means and covariances
+  pre_calcs <- pre_calc_ar(sigma, 1)
+  cond_sd <- sqrt(as.numeric(pre_calcs$cond_cov))
+  cond_mean <- mean_mat[, 1] + as.numeric(pre_calcs$mean_pre) *
+    (y - as.numeric(mean_mat[, -1]))
+
+  ## Probabilities when continuous y is observed
+  probs <- pnorm((cuts_high - cond_mean) / cond_sd) -
+    pnorm((cuts_low - cond_mean) / cond_sd)
+
+  ## Probabilities when continuous y is missing
+  probs2 <- pnorm((cuts_high - mean_mat[, 1]) / sqrt(sigma[1, 1])) -
+    pnorm((cuts_low - mean_mat[, 1]) / sqrt(sigma[1, 1]))
+
+  ## Probabilities to use for the latent outcomes
+  probs <- coalesce(probs, probs2)
+  cont_vals <- dnorm(y, mean = mean_mat[, 2], sd = sqrt(sigma[2, 2]))
+  cont_vals[is.na(cont_vals)] <- 1
+  probs * cont_vals
+}
+
+
+#' Get DIC
+#'
+#' @param y_current current continous outcome values
+#' @param mean_vec vector of mean values
+#' @param pre_calc_mat a pre-calculated matrix
+#' @param ord_loc number of ordinal outcomes
+#' @importFrom mvtnorm dmvnorm
+#' @return scalar
+
+get_lppd_ar <- function(y, X, z, Z_kron, pat_idx, pat_idx_long, beta, sigma,
+                        cuts, pat_eff, miss_mat, samp_info, cv_locs, ar_val,
+                        data) {
+
+  mean_vec <- as.numeric(X %*% beta) + rowSums(Z_kron * pat_eff[pat_idx_long, ])
+  mean_mat <- matrix(mean_vec, ncol = ncol(y))
+
+  ## Calculate cuts
+  cuts_low <- cuts[z]
+  cuts_low[is.na(cuts_low)] <- -Inf
+  cuts_high <- cuts[z + 1]
+  cuts_high[is.na(cuts_high)] <- Inf
+
+  ## storage for likelihood evaluations
+  probs <- matrix(NA, nrow = length(cv_locs), ncol = 2)
+  res_idx <- 1
+  sig_small_inv <- chol2inv(chol(sigma))
+  time_old <- 0
+  for(i in cv_locs) {
+    ## Locations of vectors to sample
+    pat <- pat_idx[i]
+    ord_locs <- which(pat_idx == pat)
+    all_locs <- which(pat_idx_long == pat)
+    times <- data$time[ord_locs]
+    ord_idx <- which(ord_locs == i)
+    cont_idx <- ord_idx + length(ord_locs)
+
+    ## Full covariance matrix
+    dist_mat <- as.matrix(dist(times, diag = T, upper = T))
+    sig_kron <- kronecker(sigma, ar_val ^ dist_mat)
+
+    # Likelihood contribution from continuous outcome ------------------------
+
+    ## Covariance and mean
+    sig_inv <- chol2inv(chol(sig_kron[-ord_idx, -ord_idx]))
+    g <- sig_inv %*% (y[ord_locs, ][-ord_idx] - mean_mat[ord_locs, ][-ord_idx])
+    var_use <- 1 / sig_inv[cont_idx - 1, cont_idx - 1]
+    sd_use <- sqrt(var_use)
+    tmp_mean <- y[ord_locs, ][cont_idx] - g[cont_idx - 1] * var_use
+
+    if(!miss_mat[i, 2]) {
+      probs[res_idx, 2] <- dnorm(x = y[i, 2], mean = tmp_mean, sd = sd_use)
+    } else {
+      probs[res_idx, 2] <- 1
+    }
+
+    # Likelihood contribution from Ordinal outcome ------------------------
+
+    ## Covariance and mean
+    if(miss_mat[i, 2]) {
+      pre_calcs <- pre_calc_ar(sig_kron[-cont_idx, -cont_idx], locs = ord_idx)
+      cond_sd <- sqrt(as.numeric(pre_calcs$cond_cov))
+      cond_mean <- mean_mat[ord_locs, ][ord_idx] +
+        as.numeric(pre_calcs$mean_pre) %*%
+        (as.numeric(y[setdiff(ord_locs, i), ]) -
+           as.numeric(mean_mat[setdiff(ord_locs, i), ]))
+    } else {
+      #pre_calcs <- pre_calc_ar(sig_kron, locs = ord_idx)
+      #cond_sd <- sqrt(as.numeric(pre_calcs$cond_cov))
+      #cond_mean <- mean_mat[ord_locs, ][ord_idx] +
+      #  as.numeric(pre_calcs$mean_pre) %*% (y[ord_locs, ][-ord_idx] -
+      #                                        mean_mat[ord_locs, ][-ord_idx])
+      dist_inv <- chol2inv(chol(ar_val ^ dist_mat))
+      sig_inv_ord <- kronecker(sig_small_inv, dist_inv)
+      y[ord_locs, ][ord_idx] <- 1000
+      g <- sig_inv_ord %*% (as.numeric(y[ord_locs, ]) - as.numeric(mean_mat[ord_locs, ]))
+      var_use <- 1 / sig_inv_ord[ord_idx, ord_idx]
+      cond_sd <- sqrt(var_use)
+      cond_mean <- y[ord_locs, ][ord_idx] - g[ord_idx] * var_use
+    }
+
+    ## Evaluate ordinal outcome
+    if(!is.na(z[i])) {
+      probs[res_idx, 1] <- pnorm((cuts_high[i] - cond_mean) / cond_sd) -
+        pnorm((cuts_low[i] - cond_mean) / cond_sd)
+    } else {
+      probs[res_idx, 1] <- 1
+    }
+
+    ## Update indexing
+    res_idx <- res_idx + 1
+    time_old <- times
+  }
+
+  probs[, 1] * probs[, 2]
+}

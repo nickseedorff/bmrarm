@@ -1,0 +1,57 @@
+
+
+ for(i in 2:nsim) {
+     samp_info$num_iter <- i
+ 
+       ## Regression coefficients
+       vals <- bmrarm_fc_sig_beta(y, X, Z_kron, cur_draws, samp_info)
+       res_beta[, i] <- cur_draws$beta <- vals$beta
+       res_sig[, i] <- cur_draws$sigma <- vals$sig
+   
+         # Autoregressive parameter
+         if(samp_info$ar_cov) {
+             vals <- bmrarm_mh_ar(y, X, Z_kron, cur_draws, samp_info)
+             cur_draws$ar <- vals$ar
+             res_accept[i, 2] <- vals$accept
+           }
+       res_ar[i] <- cur_draws$ar
+   
+         ## Subject specific effects
+         # vals <- bmrarm_fc_patient(y, z, X, cur_draws, samp_info, prior_mat)
+         # res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
+         # res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
+     
+         vals <- bmrarm_fc_patient_siw(y, z, X, cur_draws, samp_info, 1, Z_kron, prior_siw_uni)
+         res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
+         res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
+         res_pat_sig_q[,i] <- cur_draws$pat_sig_q <- vals$pat_sig_q
+         res_pat_sig_sd[,i] <- cur_draws$pat_sig_sd <- vals$pat_sig_sd
+         res_accept[i, 3:6] <- vals$accept_vec
+     
+           ## Latent values, missing values, cut points
+           y_cuts <- bmrarm_fc_y_cuts(y, z, X, Z_kron, cur_draws, samp_info)
+           y <-  res_y[,, i] <- y_cuts$y
+           res_cuts[, i] <- cur_draws$cuts <- y_cuts$cuts
+           res_accept[i, 1] <- y_cuts$accept
+       
+             ## Udate again
+             new_cut <- runif(1, max(y[z == 2, 1], na.rm = T), min(y[z == 3, 1], na.rm = T))
+             res_cuts[4:5, i] <- cur_draws$cuts[4:5] / new_cut
+             y[, 1] <- y[, 1] / new_cut
+             res_ar[i] <- cur_draws$ar <- cur_draws$ar / new_cut
+             res_pat_eff[,1:2, i] <- cur_draws$pat_effects[, 1:2]  <- cur_draws$pat_effects[, 1:2] / new_cut
+             cur_draws$beta <- cur_draws$beta / new_cut
+             cur_draws$sigma <- diag(c(1 / new_cut, 1)) %*% cur_draws$sigma %*% diag(c(1 / new_cut, 1))
+             cur_draws$pat_sig_q <- diag(rep(c(1 / new_cut, 1), each = 2)) %*% cur_draws$pat_sig_q %*% diag(rep(c(1 / new_cut, 1), each = 2))
+             cur_draws$pat_sig <- diag(rep(c(1 / new_cut, 1), each = 2)) %*% cur_draws$pat_sig %*% diag(rep(c(1 / new_cut, 1), each = 2))
+             vals$pat_sig_sd[1:2] <- vals$pat_sig_sd[1:2] / new_cut
+         
+               ## Update missing values
+               y <- res_y[,, i]<- bmrarm_fc_missing(y, z, X, Z_kron, cur_draws, samp_info)
+           
+                 ## Cut points
+                 if(i %% 150 == 100) plot(res_cuts[4, ], type = "l")
+                 if(i %% 150 == 50 & i +  burn_in) print(round(c(colMeans(res_accept[(burn_in + 1):nsim,], na.rm = T), i), 3))
+               if(i %% 150 == 0) plot(res_pat_sig[1, ], type = "l")
+ }
+                 

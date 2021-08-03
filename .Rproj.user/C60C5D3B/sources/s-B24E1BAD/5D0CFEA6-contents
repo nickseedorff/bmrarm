@@ -1,0 +1,60 @@
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(tidyr)
+library(coda)
+library(ggmcmc)
+library(bmrarm)
+
+setwd("C:\\Users\\Nick\\Dropbox\\_Thesis\\bmrvar\\long_sims")
+source("../run_apps_sims//helper_functions.R")
+
+## Collect objects
+
+
+# Proposed Model results --------------------------------------------------
+res_ar <- res_slope <- matrix(NA, nrow = 300, ncol = 12)
+for(i in 1:300){
+  ## Models with AR data
+  int_mod <- readRDS(paste0("Z:\\bmrarm\\samples\\int_model_ar_data", i, "_siw_small.RDS"))
+  slope_mod <- readRDS(paste0("Z:\\bmrarm\\samples\\slope_model_ar_data", i, "_siw_small.RDS"))
+  ar_mod <- readRDS(paste0("Z:\\bmrarm\\samples\\ar_model_ar_data", i, "_siw_small.RDS"))
+
+  ## Conditional DICs
+  get_DIC(int_mod$samps)
+  get_DIC(slope_mod$samps)
+  get_DIC_ar(ar_mod$samps)
+
+  ## Marginal DICs
+
+  ## Results for the AR data
+  res_ar[i, 1:3] <- tmp$cDIC[1:3]
+  res_ar[i, 4:6] <- tmp$mDIC[1:3]
+  res_ar[i, 7] <- which.min(tmp$cDIC[1:3])
+  res_ar[i, 8] <- which.min(tmp$mDIC[1:3])
+  res_ar[i, 9] <- tmp$rho[3]
+  res_ar[i, 10] <- as.numeric((tmp$mDIC[2] - tmp$mDIC[3]) > 2)
+  res_ar[i, 11] <- as.numeric((tmp$cDIC[2] - tmp$cDIC[3]) > 2)
+
+  res_slope[i, 1:3] <- tmp$cDIC[1:3]
+  res_slope[i, 4:6] <- tmp$mDIC[1:3]
+  res_slope[i, 7] <- which.min(tmp$cDIC[1:3])
+  res_slope[i, 8] <- which.min(tmp$mDIC[1:3])
+  res_slope[i, 9] <- tmp$rho[3]
+  res_slope[i, 10] <- as.numeric((tmp$mDIC[2] - tmp$mDIC[3]) > 2)
+  res_slope[i, 11] <- as.numeric((tmp$cDIC[2] - tmp$cDIC[3]) > 2)
+  print(i)
+}
+
+mean(res_ar[, 7] == 3, na.rm = T)
+mean(res_ar[, 8] == 3, na.rm = T)
+mean((res_ar[, 8] == 3) * res_ar[, 10] , na.rm = T)
+mean((res_ar[, 7] == 3) * res_ar[, 11] , na.rm = T)
+mean((res_ar[, 8] == 3) * res_ar[, 12] , na.rm = T)
+
+mean(res_slope[, 7] == 2, na.rm = T)
+mean(res_slope[, 8] == 2, na.rm = T)
+mean((res_slope[, 8] == 3) * res_slope[, 10] , na.rm = T)
+mean((res_slope[, 8] == 3) * res_slope[, 11] , na.rm = T)
+mean((res_slope[, 8] == 3) * res_slope[, 12] , na.rm = T)

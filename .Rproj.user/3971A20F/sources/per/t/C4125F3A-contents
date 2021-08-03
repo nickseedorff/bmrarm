@@ -1,0 +1,321 @@
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(tidyr)
+library(coda)
+library(ggmcmc)
+library(xtable)
+
+
+setwd("C:\\Users\\nicho\\Dropbox\\_Thesis\\bmrvar\\long_sims")
+source("../run_apps_sims//helper_functions.R")
+
+## Collect objects
+max_mod <- 4
+mod_list <- list()
+obs <- c(1:max_mod)
+for(i in 1:length(obs)){
+  mod_list[[i]] <- readRDS(paste0("Z:\\bmrarm\\samples\\leish_data_ar_model_siw_small", i, ".RDS"))
+  print(mod_list[[i]]$runtime)
+}
+
+## Combined into a single model for DIC
+full_mod <- mod_list[[1]]$samps
+full_mod$res_beta <- cbind(mod_list[[1]]$samps$res_beta,
+                           mod_list[[2]]$samps$res_beta,
+                           mod_list[[3]]$samps$res_beta,
+                           mod_list[[4]]$samps$res_beta)
+
+full_mod$res_pat_sig <- cbind(mod_list[[1]]$samps$res_pat_sig,
+                              mod_list[[2]]$samps$res_pat_sig,
+                              mod_list[[3]]$samps$res_pat_sig,
+                              mod_list[[4]]$samps$res_pat_sig)
+
+full_mod$res_sigma <- cbind(mod_list[[1]]$samps$res_sigma,
+                            mod_list[[2]]$samps$res_sigma,
+                            mod_list[[3]]$samps$res_sigma,
+                            mod_list[[4]]$samps$res_sigma)
+
+full_mod$res_cuts <- cbind(mod_list[[1]]$samps$res_cuts,
+                           mod_list[[2]]$samps$res_cuts,
+                           mod_list[[3]]$samps$res_cuts,
+                           mod_list[[4]]$samps$res_cuts)
+
+full_mod$res_ar <- c(mod_list[[1]]$samps$res_ar, mod_list[[2]]$samps$res_ar,
+                     mod_list[[3]]$samps$res_ar, mod_list[[4]]$samps$res_ar)
+
+full_mod$res_y <- abind::abind(mod_list[[1]]$samps$res_y,
+                               mod_list[[2]]$samps$res_y,
+                               mod_list[[3]]$samps$res_y,
+                               mod_list[[4]]$samps$res_y, along = 3)
+
+full_mod$res_pat_eff <- abind::abind(mod_list[[1]]$samps$res_pat_eff,
+                              mod_list[[2]]$samps$res_pat_eff,
+                              mod_list[[3]]$samps$res_pat_eff,
+                              mod_list[[4]]$samps$res_pat_eff, along = 3)
+
+summary(mcmc(as.vector(full_mod$res_ar)))
+bmrarm:::get_DIC_ar(full_mod, marginal = T)
+
+
+exp(-log(0.35))
+
+exp(-1.0498 * seq(1, 10, 0.1))
+
+plot(0.35 ^ seq(1, 10, 0.1))
+lines(exp(-1.0498 * seq(1, 10, 0.1)), col = "red")
+
+
+plot(exp(-2.857 * seq(1, 10, 0.1)))
+
+# Posterior Predictive Checks ---------------------------------------------
+
+## Get all predictions
+set.seed(1)
+all_preds <- get_pred(full_mod)
+#saveRDS(all_preds, "./leish_posterior_preds.RDS")
+all_preds <- readRDS("./leish_posterior_preds.RDS")
+data <- mod_list[[1]]$data
+n_samp <- length(all_preds)
+res <- matrix(NA, nrow = 3, ncol = n_samp)
+
+for(i in 1:n_samp){
+  data$leish_pred <- all_preds[[i]][, 1]
+  dat_group <- group_by(data, ID) %>%
+    filter(!is.na(leish_model)) %>%
+    summarise(num_trans = sum(leish_pred != lag(leish_pred), na.rm = T),
+              num_unique = length(unique(leish_pred))) %>%
+    ungroup() %>%
+    mutate(trans_cat = ifelse(num_trans == 0, 0,
+                              ifelse(num_trans <= 2, 1, 2)))
+
+  ## Number of transitions
+  res_tmp <-
+    group_by(dat_group, trans_cat) %>%
+    summarise(n(), round(n() / 48 * 100, 3))
+
+  if(min(res_tmp$trans_cat) == 1) {
+    res[, i] <- c(0, res_tmp$`n()`)
+  } else {
+    res[, i] <- res_tmp$`n()`
+  }
+}
+
+## Bayesian p-values for the ordinal data
+mean(res[1, ] >= 8, na.rm = T)
+round(summary(mcmc(res[1, ]))[[2]][c(1, 5)] / 48 * 100, 1)
+mean(res[2, ] >= 25, na.rm = T)
+round(summary(mcmc(res[2, ]))[[2]][c(1, 5)] / 48 * 100, 1)
+mean(res[3, ] >= 15, na.rm = T)
+round(summary(mcmc(res[3, ]))[[2]][c(1, 5)] / 48 * 100, 1)
+
+## Continuous outcomes
+res2 <- matrix(NA, nrow = 5, ncol = n_samp)
+dat_last <- filter(data, time + 1 == max_not_na)
+all_preds_keep <- matrix(NA, 48, n_samp)
+for(i in 1:n_samp){
+  dat_last$log_sla_pred <- all_preds[[i]]$last_preds[, 2]
+  all_preds_keep[, i] <- all_preds[[i]]$last_preds[, 2]
+
+  dat_group <- dat_last %>%
+    summarise(mean(log_sla_pred),
+              median(log_sla_pred),
+              sd(log_sla_pred),
+              min(log_sla_pred),
+              max(log_sla_pred))
+  res2[, i] <- unlist(dat_group)
+  print(i)
+}
+
+library(bayesplot)
+library(lme4)
+plot(mod <- lmer(log_sla ~ treatment_group + time + age_ind + Hunt + (time|ID), data = data))
+plot(density(resid(mod), na.rm = T))
+plot(density(data$log_sla, na.rm = T))
+hist(resid(mod), breaks = 60)
+ppc_dens_overlay_grouped(dat_last$log_sla, t(all_preds_keep[, 1:25]), group = dat_last$age_ind)
+ppc_dens_overlay_grouped(dat_last$log_sla, t(all_preds_keep[, 1:25]), group = dat_last$treatment)
+ppc_dens_overlay_grouped(dat_last$log_sla, t(all_preds_keep[, 1:25]), group = dat_last$Hunt)
+ppc_dens_overlay_grouped(dat_last$log_sla, t(all_preds_keep[, 1:25]), group = dat_last$leish_model)
+p1 <- ppc_stat(dat_last$log_sla, t(all_preds_keep), stat = 'median') +
+  annotate(geom="text",  x=Inf, y = Inf, label = "p-value=0.27", vjust=1, hjust=1)
+p2 <- ppc_stat(dat_last$log_sla, t(all_preds_keep), stat = 'sd')  +
+  annotate(geom="text",  x=Inf, y = Inf, label = "p-value=0.89", vjust=1, hjust=1)
+p3 <- ppc_stat(dat_last$log_sla, t(all_preds_keep), stat = 'min') +
+  annotate(geom="text",  x=Inf, y = Inf, label = "p-value=0.54", vjust=1, hjust=1)
+p4 <- ppc_stat(dat_last$log_sla, t(all_preds_keep), stat = 'max') +
+  annotate(geom="text",  x=Inf, y = Inf, label = "p-value=0.92", vjust=1, hjust=1)
+
+bayesplot_grid(p1, p2, p3, p4)
+
+q95 <- function(x) quantile(x, probs = 0.05)
+ppc_stat(dat_last$log_sla, t(all_preds_keep), stat = 'q95')
+
+mean(apply(all_preds_keep, 2, function(x) quantile(x, probs = 0.05) >
+        quantile(dat_last$log_sla, probs = 0.05)))
+mean(res2[1, ] >= mean(dat_last$log_sla, na.rm = T))
+mean(res2[2, ] >= median(dat_last$log_sla, na.rm = T))
+mean(res2[3, ] >= sd(dat_last$log_sla, na.rm = T))
+mean(res2[4, ] >= min(dat_last$log_sla, na.rm = T))
+mean(res2[5, ] >= max(dat_last$log_sla, na.rm = T))
+
+hist(res2[1, ], breaks = 50)
+abline(v = median(dat_last$log_sla, na.rm = T), col = 2, lwd = 2)
+
+hist(res2[2, ], breaks = 50)
+abline(v = sd(dat_last$log_sla, na.rm = T), col = 2, lwd = 2)
+
+hist(res2[3, ], breaks = 50)
+abline(v = min(dat_last$log_sla, na.rm = T), col = 2, lwd = 2)
+
+hist(res2[4, ], breaks = 50)
+abline(v = max(dat_last$log_sla, na.rm = T), col = 2, lwd = 2)
+
+###########################################################################
+# Generate Plots ----------------------------------------------------------
+###########################################################################
+
+setwd("C:\\Users\\Nick\\Dropbox\\_Thesis\\bmrvar\\long_sims")
+source("../run_apps_sims//helper_functions.R")
+
+## Collect objects
+max_mod <- 4
+mod_list <- list()
+obs <- c(1:max_mod)
+for(i in 1:length(obs)){
+  mod_list[[i]] <- readRDS(paste0("Z:\\bmrarm\\samples\\leish_data_ar_model_siw_small", i, ".RDS"))
+  print(mod_list[[i]]$runtime)
+}
+
+## Combined into a single model for DIC
+full_mod <- mod_list[[1]]$samps
+full_mod$res_beta <- cbind(mod_list[[1]]$samps$res_beta,
+                           mod_list[[2]]$samps$res_beta,
+                           mod_list[[3]]$samps$res_beta,
+                           mod_list[[4]]$samps$res_beta)
+
+full_mod$res_pat_sig <- cbind(mod_list[[1]]$samps$res_pat_sig,
+                              mod_list[[2]]$samps$res_pat_sig,
+                              mod_list[[3]]$samps$res_pat_sig,
+                              mod_list[[4]]$samps$res_pat_sig)
+
+full_mod$res_sigma <- cbind(mod_list[[1]]$samps$res_sigma,
+                            mod_list[[2]]$samps$res_sigma,
+                            mod_list[[3]]$samps$res_sigma,
+                            mod_list[[4]]$samps$res_sigma)
+
+full_mod$res_cuts <- cbind(mod_list[[1]]$samps$res_cuts,
+                           mod_list[[2]]$samps$res_cuts,
+                           mod_list[[3]]$samps$res_cuts,
+                           mod_list[[4]]$samps$res_cuts)
+
+full_mod$res_ar <- c(mod_list[[1]]$samps$res_ar, mod_list[[2]]$samps$res_ar,
+                     mod_list[[3]]$samps$res_ar, mod_list[[4]]$samps$res_ar)
+
+full_mod$res_y <- abind::abind(mod_list[[1]]$samps$res_y,
+                               mod_list[[2]]$samps$res_y,
+                               mod_list[[3]]$samps$res_y,
+                               mod_list[[4]]$samps$res_y, along = 3)
+
+full_mod$res_pat_eff <- abind::abind(mod_list[[1]]$samps$res_pat_eff,
+                                     mod_list[[2]]$samps$res_pat_eff,
+                                     mod_list[[3]]$samps$res_pat_eff,
+                                     mod_list[[4]]$samps$res_pat_eff, along = 3)
+
+summary(mcmc(as.vector(full_mod$res_ar)))
+bmrarm:::get_DIC_ar(full_mod, marginal = T)
+
+## Collect objects
+max_mod <- 4
+mod_list <- list()
+obs <- c(1:max_mod)
+for(i in 1:length(obs)){
+  mod_list[[i]] <- readRDS(paste0("Z:\\bmrarm\\samples\\leish_data_slope_model_siw_small", i, ".RDS"))
+  print(mod_list[[i]]$runtime)
+}
+
+## Combined into a single model for DIC
+full_mod <- mod_list[[1]]$samps
+full_mod$res_beta <- cbind(mod_list[[1]]$samps$res_beta,
+                           mod_list[[2]]$samps$res_beta,
+                           mod_list[[3]]$samps$res_beta,
+                           mod_list[[4]]$samps$res_beta)
+
+full_mod$res_pat_sig <- cbind(mod_list[[1]]$samps$res_pat_sig,
+                              mod_list[[2]]$samps$res_pat_sig,
+                              mod_list[[3]]$samps$res_pat_sig,
+                              mod_list[[4]]$samps$res_pat_sig)
+
+full_mod$res_sigma <- cbind(mod_list[[1]]$samps$res_sigma,
+                            mod_list[[2]]$samps$res_sigma,
+                            mod_list[[3]]$samps$res_sigma,
+                            mod_list[[4]]$samps$res_sigma)
+
+full_mod$res_cuts <- cbind(mod_list[[1]]$samps$res_cuts,
+                           mod_list[[2]]$samps$res_cuts,
+                           mod_list[[3]]$samps$res_cuts,
+                           mod_list[[4]]$samps$res_cuts)
+
+full_mod$res_ar <- c(mod_list[[1]]$samps$res_ar, mod_list[[2]]$samps$res_ar,
+                     mod_list[[3]]$samps$res_ar, mod_list[[4]]$samps$res_ar)
+
+full_mod$res_y <- abind::abind(mod_list[[1]]$samps$res_y,
+                               mod_list[[2]]$samps$res_y,
+                               mod_list[[3]]$samps$res_y,
+                               mod_list[[4]]$samps$res_y, along = 3)
+
+full_mod$res_pat_eff <- abind::abind(mod_list[[1]]$samps$res_pat_eff,
+                                     mod_list[[2]]$samps$res_pat_eff,
+                                     mod_list[[3]]$samps$res_pat_eff,
+                                     mod_list[[4]]$samps$res_pat_eff, along = 3)
+
+summary(mcmc(as.vector(full_mod$res_ar)))
+bmrarm:::get_DIC_ar(full_mod, marginal = T)
+
+## Collect objects
+max_mod <- 4
+mod_list <- list()
+obs <- c(1:max_mod)
+for(i in 1:length(obs)){
+  mod_list[[i]] <- readRDS(paste0("Z:\\bmrarm\\samples\\leish_data_int_model_siw_small", i, ".RDS"))
+  print(mod_list[[i]]$runtime)
+}
+
+## Combined into a single model for DIC
+full_mod <- mod_list[[1]]$samps
+full_mod$res_beta <- cbind(mod_list[[1]]$samps$res_beta,
+                           mod_list[[2]]$samps$res_beta,
+                           mod_list[[3]]$samps$res_beta,
+                           mod_list[[4]]$samps$res_beta)
+
+full_mod$res_pat_sig <- cbind(mod_list[[1]]$samps$res_pat_sig,
+                              mod_list[[2]]$samps$res_pat_sig,
+                              mod_list[[3]]$samps$res_pat_sig,
+                              mod_list[[4]]$samps$res_pat_sig)
+
+full_mod$res_sigma <- cbind(mod_list[[1]]$samps$res_sigma,
+                            mod_list[[2]]$samps$res_sigma,
+                            mod_list[[3]]$samps$res_sigma,
+                            mod_list[[4]]$samps$res_sigma)
+
+full_mod$res_cuts <- cbind(mod_list[[1]]$samps$res_cuts,
+                           mod_list[[2]]$samps$res_cuts,
+                           mod_list[[3]]$samps$res_cuts,
+                           mod_list[[4]]$samps$res_cuts)
+
+full_mod$res_ar <- c(mod_list[[1]]$samps$res_ar, mod_list[[2]]$samps$res_ar,
+                     mod_list[[3]]$samps$res_ar, mod_list[[4]]$samps$res_ar)
+
+full_mod$res_y <- abind::abind(mod_list[[1]]$samps$res_y,
+                               mod_list[[2]]$samps$res_y,
+                               mod_list[[3]]$samps$res_y,
+                               mod_list[[4]]$samps$res_y, along = 3)
+
+full_mod$res_pat_eff <- abind::abind(mod_list[[1]]$samps$res_pat_eff,
+                                     mod_list[[2]]$samps$res_pat_eff,
+                                     mod_list[[3]]$samps$res_pat_eff,
+                                     mod_list[[4]]$samps$res_pat_eff, along = 3)
+
+summary(mcmc(as.vector(full_mod$res_ar)))
+bmrarm:::get_DIC_ar(full_mod, marginal = T)

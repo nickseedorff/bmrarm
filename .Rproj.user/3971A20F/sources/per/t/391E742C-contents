@@ -1,0 +1,48 @@
+install.packages("C:\\Users\\nicho\\Dropbox\\_Thesis\\bmrvar\\packages\\bmrarm", repos = NULL, type="source")
+library(bmrarm)
+library(dplyr)
+library(ggplot2)
+setwd("C:\\Users\\nicho\\Dropbox\\_Thesis\\bmrvar\\run_apps_sims")
+
+burn <- 500
+sims <- 20000
+N_pat <- 48
+i <- 1
+options(warn = 2)
+
+## Different data
+for(i in 1:250){
+	start_time <- Sys.time()
+  sim_data <- bmrarm:::gen_ar_errors(7, N_pat, seed = i, slope = T, unequal = T,
+  																	 ar_cov = T)
+
+  samps <- baseline_bmr(formula = cbind(y_ord, y2) ~ time, data = sim_data$data,
+  											ordinal_outcome = "y_ord", patient_var = "pat_idx",
+  											random_slope = T, time_var = "time", ar_cov = T,
+  											burn_in = burn, nsim = sims, thin = 5, seed = i,
+  											sd_vec = c(0.15, 0.15), sep_sig = F)
+
+  fname <- paste0("./../long_sims/chapter3_sim_same_sig", i, ".RDS")
+  saveRDS(list(samps = samps, data = sim_data,
+               runtime = Sys.time() - start_time), fname)
+	print(i)
+}
+
+## Same data
+for(i in 2:4){
+	start_time <- Sys.time()
+	sim_data <- bmrarm:::gen_ar_errors(7, N_pat, seed = 36, slope = T, unequal = T,
+																		 ar_cov = T)
+
+	samps <- baseline_bmr(formula = cbind(y_ord, y2) ~ time, data = sim_data$data,
+												ordinal_outcome = "y_ord", patient_var = "pat_idx",
+												random_slope = T, time_var = "time", ar_cov = T,
+												burn_in = burn, nsim = sims, thin = 1, seed = i,
+												sd_vec = c(0.14, 0.15, 0.55, 0.25, 0.35, 0.25))
+
+	fname <- paste0("./../long_sims/chapter3_sim_same_ar_siw", i, ".RDS")
+	saveRDS(list(samps = samps, data = sim_data,
+							 runtime = Sys.time() - start_time), fname)
+	print(i)
+}
+

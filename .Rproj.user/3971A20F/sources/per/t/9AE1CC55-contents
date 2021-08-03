@@ -1,0 +1,52 @@
+install.packages("C:\\Users\\nicho\\Dropbox\\_Thesis\\bmrvar\\packages\\bmrarm", repos = NULL, type="source")
+library(bmrarm)
+library(dplyr)
+library(ggplot2)
+setwd("C:\\Users\\nicho\\Dropbox\\_Thesis\\bmrvar\\run_apps_sims")
+
+burn <- 5000
+sims <- 25000
+
+data <- read.csv("C:\\Users\\nicho\\Dropbox\\_Thesis\\bmrvar\\store_apps_sims//leish_modeling_data.csv") %>%
+  mutate(true_log_sla = log_sla, true_leish = leish_model,
+         pat_idx = dense_rank(as.factor(ID)),
+         age_ind = as.numeric(age_model == "3-11 years old"),
+         hunt_M = as.numeric(Hunt == "M"),
+         hunt_W = as.numeric(Hunt == "W")) %>%
+  filter(!is.na(log_sla) | !is.na(leish_model)) %>%
+  as.data.frame()
+data$log_dpp <- log(data$DPP_Enroll)
+
+# DIC for each modeling type ----------------------------------------------
+
+## Intercept only model
+samps <- baseline_bmr(formula = cbind(leish_model, log_sla) ~ time + age_ind + log_dpp + hunt_M + hunt_W,
+                      data = data, ordinal_outcome = "leish_model", patient_var = "pat_idx",
+                      random_slope = F, time_var = "time", ar_cov = F,
+                      burn_in = burn, nsim = sims, thin = 5, seed = 4,
+                      sd_vec = c(0.35, 0.15))
+fname <- paste0("./../long_sims/chapter3_select_int_model_leish_data.RDS")
+samps$res_ar[] <- 0
+saveRDS(list(samps = samps, data = data,
+             mDIC = bmrarm:::get_DIC_ar(samps, marginal = T)), fname)
+
+## Intercept and slope model
+samps <- baseline_bmr(formula = cbind(leish_model, log_sla) ~ time + age_ind + log_dpp + hunt_M + hunt_W,
+                      data = data, ordinal_outcome = "leish_model", patient_var = "pat_idx",
+                      random_slope = T, time_var = "time", ar_cov = F,
+                      burn_in = burn, nsim = sims, thin = 5, seed = 4,
+                      sd_vec = c(0.35, 0.15))
+fname <- paste0("./../long_sims/chapter3_select_slope_model_leish_data.RDS")
+samps$res_ar[] <- 0
+saveRDS(list(samps = samps, data = data,
+             mDIC = bmrarm:::get_DIC_ar(samps, marginal = T)), fname)
+
+## Intercept, slope, and AIC
+samps <- baseline_bmr(formula = cbind(leish_model, log_sla) ~ time + age_ind + log_dpp + hunt_M + hunt_W,
+                      data = data, ordinal_outcome = "leish_model", patient_var = "pat_idx",
+                      random_slope = T, time_var = "time", ar_cov = T,
+                      burn_in = burn, nsim = sims, thin = 5, seed = 4,
+                      sd_vec = c(0.35, 0.15))
+fname <- paste0("./../long_sims/chapter3_select_ar_model_leish_data.RDS")
+saveRDS(list(samps = samps, data = data,
+             mDIC = bmrarm:::get_DIC_ar(samps, marginal = T)), fname)

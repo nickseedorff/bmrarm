@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1624659044590.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "810651939",
+    "id" : "25A871A2",
+    "lastKnownWriteTime" : 1625065395,
+    "last_content_update" : 1625065395402,
+    "path" : "C:/Users/nicho/Dropbox/_Thesis/bmrvar/packages/bmrarm/R/bmrarm.R",
+    "project_path" : "R/bmrarm.R",
+    "properties" : {
+        "cursorPosition" : "67,22",
+        "scrollLine" : "0"
+    },
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

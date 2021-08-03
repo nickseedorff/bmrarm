@@ -1,0 +1,100 @@
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(tidyr)
+library(coda)
+library(ggmcmc)
+library(bmrarm)
+
+setwd("C:\\Users\\Nick\\Dropbox\\_Thesis\\bmrvar\\long_sims")
+source("../run_apps_sims//helper_functions.R")
+
+# Proposed Model results --------------------------------------------------
+for(i in 1:300){
+  mod1 <- readRDS(paste0("Z:\\bmrarm\\samples\\ar_model_ar_data", i, "_siw_small.RDS"))
+  mod2 <- readRDS(paste0("Z:\\bmrarm\\samples\\slope_model_ar_data", i, "_siw.RDS"))
+  if(i == 1) {
+    all_res <- all_res_ar(list(mod1))
+    all_res2 <- all_res_ar(list(mod2))
+  } else {
+    all_res <- rbind(all_res, all_res_ar(list(mod1)))
+    all_res2 <- rbind(all_res2, all_res_ar(list(mod2)))
+  }
+  print(i)
+}
+
+###########################################################################
+# Summary for AR Models ---------------------------------------------------
+###########################################################################
+
+res_eta <- sum_res(all_res)
+mean(res_eta$cover)
+
+write.csv(all_res, "./chapter3_sims_ar_all_res.csv", row.names = FALSE)
+write.csv(res_eta, "./chapter3_sims_ar_res.csv", row.names = FALSE)
+
+res_filt <- filter(res_eta, substring(parameter, 1, 4) != "alph")
+mean(res_filt$cover)
+
+res_filt2 <- filter(res_eta, substring(parameter, 1, 4) == "alph")
+mean(res_filt2$cover)
+
+###########################################################################
+# Summary for Slope Models ------------------------------------------------
+###########################################################################
+
+res_eta2 <- sum_res(all_res2) %>%
+  filter(parameter != "ar_1")
+mean(res_eta2$cover)
+
+write.csv(all_res2, "./chapter3_sims_slope_all_res.csv", row.names = FALSE)
+write.csv(res_eta2, "./chapter3_sims_slope_res.csv", row.names = FALSE)
+
+res_filt <- filter(res_eta2, substring(parameter, 1, 4) != "alph")
+mean(res_filt$cover)
+
+res_filt2 <- filter(res_eta2, substring(parameter, 1, 4) == "alph")
+mean(res_filt2$cover)
+
+###########################################################################
+# Latex output ------------------------------------------------
+###########################################################################
+
+library(xtable)
+res_eta <- read.csv("./chapter3_sims_ar_res.csv")
+res_eta2 <- read.csv("./chapter3_sims_slope_res.csv")
+tab1 <- filter(res_eta, substring(parameter, 1, 4) != "alph")
+tab2 <- filter(res_eta2, substring(parameter, 1, 4) != "alph")
+colnames(tab2)[2:11] <- paste0(colnames(tab2)[2:11], "2")
+full <- left_join(tab1[, c(1, 2, 11, 7, 5, 8)],
+                  tab2[, c(1, 11, 7, 5, 8)], by = "parameter") %>%
+  mutate(sig_alpha_ind = parameter %in%
+           setdiff(paste0("sig_alpha", 1:16),
+                   paste0("sig_alpha", c(1, 6, 11, 16))),
+         sig_ind = ifelse(sig_alpha_ind, "g", parameter)) %>%
+  group_by(sig_ind) %>%
+  summarise_each(mean, -parameter)
+full_sort <- full[c(2:5, 13:15, 9:12, 6:7, 8, 1), -c(6, 10, 11)]
+
+## Param_names
+param = c("$\\beta_{11}$",
+          "$\\beta_{21}$",
+          "$\\beta_{12}$",
+          "$\\beta_{22}$",
+          "$\\Sigma_{11}$",
+          "$\\Sigma_{21}$",
+          "$\\Sigma_{22}$",
+          "$\\Sigma_{\\alpha 11}$",
+          "$\\Sigma_{\\alpha 22}$",
+          "$\\Sigma_{\\alpha 33}$",
+          "$\\Sigma_{\\alpha 44}$",
+          "$\\gamma_4$",
+          "$\\gamma_5$",
+          "$\\Sigma_{\\alpha }\\text{ Covariances}$",
+          "$\\rho$")
+full_sort$sig_ind <- param
+print(xtable(full_sort, type = "latex", digits = c(1, 1, 2, 3, 3, 3,
+                                                   3, 3, 3)),
+      include.rownames = F, include.colnames = F, sanitize.text.function = identity)
+
