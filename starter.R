@@ -1,7 +1,7 @@
 library(devtools)
 load_all()
 i <- 3
-sim_data <- gen_ar_errors(N = 7, N_pat = 48, unequal = T, seed = 4,
+sim_data <- gen_ar_errors(N = 6, N_pat = 35, unequal = F, seed = 4,
                           slope = T, ar_cov = T)
 
 

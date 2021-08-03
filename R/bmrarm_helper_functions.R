@@ -31,19 +31,20 @@ get_sig_list <- function(cur_draws, samp_info) {
   sigma <- cur_draws$sigma
   inv_sigma <- chol2inv(chol(sigma))
   for(i in 1:length(samp_info$uni_pat_times)) {
-    #dist_mat <- exp(-cur_draws$ar * samp_info$uni_dist_mat[[i]])
+    ## Get full covariance matrix
     dist_mat <- cur_draws$ar ^ samp_info$uni_dist_mat[[i]]
     time_inv[[i]] <- chol2inv(chol(dist_mat))
     time_det[[i]] <- determinant(dist_mat, logarithm = T)[[1]][1]
     sig_tmp <- kronecker(sigma, dist_mat)
     sig_list[[i]] <- sig_tmp
     sig_inv_list[[i]] <- kronecker(inv_sigma, time_inv[[i]])
+
+    ## Calculate pre-calcs and other covariance matrices
     res_tmp <-  pre_calc_ar(sig_tmp,
                             locs = 1:length(samp_info$uni_pat_times[[i]]))
     mean_pre_list[[i]] <- res_tmp$mean_pre
     cond_cov_list[[i]] <- res_tmp$cond_cov
     cond_cov_inv_list[[i]] <- chol2inv(chol(res_tmp$cond_cov))
-    #chol_list[[i]] <- t(chol(res_tmp$cond_cov))
     marg_cov_list[[i]] <- res_tmp$marg_cov
   }
   list(sig_list = sig_list,
@@ -65,7 +66,7 @@ get_sig_list2 <- function(cur_draws, samp_info) {
   inv_sigma <- chol2inv(chol(sigma))
   sig_alpha_inv <- chol2inv(chol(cur_draws$pat_sig))
   for(i in 1:length(samp_info$uni_pat_times)) {
-    #dist_mat <- exp(-cur_draws$ar * samp_info$uni_dist_mat[[i]])
+    ## Get full covariance matrix
     dist_mat <- cur_draws$ar ^ samp_info$uni_dist_mat[[i]]
     pat_ind <- min(which(samp_info$pat_time_ind == i))
     time_inv[[i]] <- chol2inv(chol(dist_mat))
@@ -73,54 +74,14 @@ get_sig_list2 <- function(cur_draws, samp_info) {
     sig_tmp <- kronecker(sigma, dist_mat)  +
       samp_info$pat_z_kron[[pat_ind]] %*% cur_draws$pat_sig %*% t(samp_info$pat_z_kron[[pat_ind]])
     sig_list[[i]] <- sig_tmp
-    #sig_inv_list[[i]] <- chol2inv(chol(sig_tmp))
-    A_inv <- kronecker(inv_sigma, chol2inv(chol(dist_mat)))
-    sig_inv_use <- A_inv - A_inv %*% samp_info$pat_z_kron[[pat_ind]] %*% (
-      sig_alpha_inv + t(samp_info$pat_z_kron[[pat_ind]]) %*% A_inv %*% samp_info$pat_z_kron[[pat_ind]]
-    ) %*% t(samp_info$pat_z_kron[[pat_ind]]) %*% A_inv
-    sig_inv_list[[i]] <- sig_inv_use
+    sig_inv_list[[i]] <- chol2inv(chol(sig_tmp))
+
+    ## Calculate pre-calcs and other covariance matrices
     res_tmp <-  pre_calc_ar(sig_tmp,
                             locs = 1:length(samp_info$uni_pat_times[[i]]))
     mean_pre_list[[i]] <- res_tmp$mean_pre
     cond_cov_list[[i]] <- res_tmp$cond_cov
     cond_cov_inv_list[[i]] <- chol2inv(chol(res_tmp$cond_cov))
-    #chol_list[[i]] <- t(chol(res_tmp$cond_cov))
-    marg_cov_list[[i]] <- res_tmp$marg_cov
-  }
-  list(sig_list = sig_list,
-       mean_pre_list = mean_pre_list, cond_cov_list = cond_cov_list,
-       cond_cov_inv_list = cond_cov_inv_list, sig_inv_list = sig_inv_list,
-       time_inv = time_inv, time_det = time_det,
-       marg_cov_list = marg_cov_list)
-}
-
-
-#' Create list of covariance matrices and optionally their inverse
-#'
-#' @param env parent environment
-
-get_sig_list3 <- function(cur_draws, samp_info) {
-  chol_list <- marg_cov_list <- sig_list <- sig_inv_list <-
-    cond_cov_inv_list <- mean_pre_list <- cond_cov_list <- time_inv <-
-    time_det <- list()
-  sigma <- cur_draws$sigma
-  inv_sigma <- chol2inv(chol(sigma))
-  for(i in 1:samp_info$N_pat) {
-    #dist_mat <- exp(-cur_draws$ar * samp_info$uni_dist_mat[[i]])
-    dist_mat <- cur_draws$ar ^ as.matrix(dist(samp_info$pat_times[[i]], upper = T, diag = T))
-    #time_inv[[i]] <- chol2inv(chol(dist_mat))
-    #time_det[[i]] <- determinant(dist_mat, logarithm = T)[[1]][1]
-    sig_tmp <- kronecker(sigma, dist_mat) +
-      samp_info$pat_z_kron[[i]] %*% cur_draws$pat_sig %*% t(samp_info$pat_z_kron[[i]])
-
-    sig_list[[i]] <- sig_tmp
-    sig_inv_list[[i]] <- qr.solve(sig_tmp)
-    res_tmp <-  pre_calc_ar(sig_tmp,
-                            locs = 1:length(samp_info$pat_times[[i]]))
-    mean_pre_list[[i]] <- res_tmp$mean_pre
-    cond_cov_list[[i]] <- res_tmp$cond_cov
-    cond_cov_inv_list[[i]] <- chol2inv(chol(res_tmp$cond_cov))
-    #chol_list[[i]] <- t(chol(res_tmp$cond_cov))
     marg_cov_list[[i]] <- res_tmp$marg_cov
   }
   list(sig_list = sig_list,
