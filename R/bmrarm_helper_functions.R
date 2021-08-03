@@ -58,8 +58,8 @@ get_sig_list <- function(cur_draws, samp_info) {
 #'
 #' @param env parent environment
 
-get_sig_list2 <- function(cur_draws, samp_info) {
-  chol_list <- marg_cov_list <- sig_list <- sig_inv_list <-
+get_sig_list_marg<- function(cur_draws, samp_info) {
+  chol_list <- marg_cov_list <- sig_list <-
     cond_cov_inv_list <- mean_pre_list <- cond_cov_list <- time_inv <-
     time_det <- list()
   sigma <- cur_draws$sigma
@@ -72,9 +72,8 @@ get_sig_list2 <- function(cur_draws, samp_info) {
     time_inv[[i]] <- chol2inv(chol(dist_mat))
     time_det[[i]] <- determinant(dist_mat, logarithm = T)[[1]][1]
     sig_tmp <- kronecker(sigma, dist_mat)  +
-      samp_info$pat_z_kron[[pat_ind]] %*% cur_draws$pat_sig %*% t(samp_info$pat_z_kron[[pat_ind]])
-    sig_list[[i]] <- sig_tmp
-    sig_inv_list[[i]] <- chol2inv(chol(sig_tmp))
+      samp_info$pat_z_kron[[pat_ind]] %*% cur_draws$pat_sig %*%
+      t(samp_info$pat_z_kron[[pat_ind]])
 
     ## Calculate pre-calcs and other covariance matrices
     res_tmp <-  pre_calc_ar(sig_tmp,
@@ -86,7 +85,7 @@ get_sig_list2 <- function(cur_draws, samp_info) {
   }
   list(sig_list = sig_list,
        mean_pre_list = mean_pre_list, cond_cov_list = cond_cov_list,
-       cond_cov_inv_list = cond_cov_inv_list, sig_inv_list = sig_inv_list,
+       cond_cov_inv_list = cond_cov_inv_list,
        time_inv = time_inv, time_det = time_det,
        marg_cov_list = marg_cov_list)
 }
