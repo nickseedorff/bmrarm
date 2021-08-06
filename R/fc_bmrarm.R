@@ -106,7 +106,7 @@ bmrarm_fc_y_cuts <- function(y, z, X, Z_kron, cur_draws, samp_info) {
     comp_val <- first_cut_prob(samp_info, cuts, cuts_tmp) * prod(prob_vec)
 
     ## Accept reject step
-    if(comp_val < runif(1)) {
+    if(comp_val < runif(1) | cuts_tmp[N_cat] > 10000) {
       return(list(y = y, cuts = cuts, accept = 0))
     }
   }

@@ -63,7 +63,7 @@ fc_sigma_theta_tilde <- function(y, X, prior_precision, y_orig, old_prior_y0) {
 #' @return list
 #' @export
 
-fc_cuts <- function(y, z, N_cat) {
+fc_cuts <- function(y, z, N_cat, upper_cut_limit) {
   cuts_list <- list()
   for(i in 1:length(N_cat)) {
     if(N_cat[i] == 2) {
@@ -75,7 +75,7 @@ fc_cuts <- function(y, z, N_cat) {
         y_late <- y[, i]
         for(j in 3:(length(cuts_list[[i]]) - 1)) {
           cuts_min <- max(y_late[(z[, i] == j - 1)])
-          cuts_max <- min(y_late[(z[, i] == j)])
+          cuts_max <- min(min(y_late[(z[, i] == j)]), upper_cut_limit[i])
           cuts_list[[i]][j] <- runif(1, cuts_min, cuts_max)
         }
       }

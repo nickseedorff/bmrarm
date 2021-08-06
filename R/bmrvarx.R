@@ -83,7 +83,8 @@ bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
     M_tilde <- t(sig_theta$theta_tilde[(N_covars + 1):(N_covars + N_response), ])
 
     ## Update cuts
-    cuts_tilde <- fc_cuts(y = w_use, z = y_ord, N_cat)
+    upper_cut_limit <- sqrt(diag(sigma_tilde)) * 10000
+    cuts_tilde <- fc_cuts(y = w_use, z = y_ord, N_cat, upper_cut_limit)
 
     ## Values need for transformations
     diag_vals <- sqrt(diag(sigma_tilde[1:N_ord, 1:N_ord, drop = FALSE]))

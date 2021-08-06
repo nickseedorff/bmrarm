@@ -30,10 +30,10 @@ test_that("bmrarm works as anticipated", {
 
 # Store results for later use or updating ---------------------------------
 
-  # saveRDS(sim_data, ".\\Test_objects/bmrarm_data_object.RDS")
-  # saveRDS(samps_int, ".\\Test_objects/bmr_int_object.RDS")
-  # saveRDS(samps_slope, ".\\Test_objects/bmr_slope_object.RDS")
-  # saveRDS(samps_ar, ".\\Test_objects/bmrarm_object.RDS")
+   #saveRDS(sim_data, ".\\Test_objects/bmrarm_data_object.RDS")
+   #saveRDS(samps_int, ".\\Test_objects/bmr_int_object.RDS")
+   #saveRDS(samps_slope, ".\\Test_objects/bmr_slope_object.RDS")
+   #saveRDS(samps_ar, ".\\Test_objects/bmrarm_object.RDS")
 
   str <- ".\\..\\..\\Test_objects/"
   expect_equal_to_reference(sim_data, paste0(str, "bmrarm_data_object.RDS"))

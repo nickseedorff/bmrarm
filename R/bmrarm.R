@@ -19,11 +19,12 @@
 #' @export
 
 bmrarm <- function(formula, data, ordinal_outcome = c("y_ord"),
-                             time_var = "time", patient_var = "patient_idx",
-                             random_slope = F, ar_cov = TRUE, nsim = 1000,
-                             burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
-                             sig_prior = 1000000000, sd_vec = c(0.15, 0.30),
-                             N_burn_trunc = 5, prior_siw_uni = c(0.2, 5)) {
+                   time_var = "time", patient_var = "patient_idx",
+                   random_slope = F, ar_cov = TRUE, nsim = 1000,
+                   burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
+                   sig_prior = 1000000000,
+                   sd_vec = c(0.15, 0.30, rep(0.2, 4)),
+                   N_burn_trunc = 10, prior_siw_uni = c(0.2, 5)) {
 
   ## Create storage
   set.seed(seed)
@@ -48,7 +49,11 @@ bmrarm <- function(formula, data, ordinal_outcome = c("y_ord"),
                                     lag(y_interp), lead(y_interp))))
   y[, 2:ncol(y)] <- matrix(df$y_interp, ncol = N_outcomes - 1)
   y[is.na(y)] <- 0
+
+
   res_accept <- matrix(NA, nsim, 6)
+  loc_accept <- 1:(4 + 2 * random_slope)
+  samp_info$N_trunc_burn <- N_burn_trunc
 
   for(i in 2:nsim) {
     samp_info$num_iter <- i
@@ -86,7 +91,7 @@ bmrarm <- function(formula, data, ordinal_outcome = c("y_ord"),
     ## Cut points
     #if(i %% 150 == 100) plot(res_cuts[4, ], type = "l")
     #if(i %% 150 == 100) plot(res_pat_sig_sd[1, ], type = "l")
-    if(i %% 150 == 50 & i > burn_in) print(round(c(colMeans(res_accept[(burn_in+1):nsim,], na.rm = T), i), 3))
+    if(i %% 150 == 50 & i > burn_in) print(round(c(colMeans(res_accept[(burn_in+1):nsim, loc_accept], na.rm = T), i), 3))
     if(i %% 150 == 0) plot(res_pat_sig[1, ], type = "l")
   }
 
@@ -101,7 +106,7 @@ bmrarm <- function(formula, data, ordinal_outcome = c("y_ord"),
     res_sigma = res_sig[, sim_use],
     res_y = res_y[,, sim_use],
     res_pat_eff = res_pat_eff[,, sim_use],
-    res_accept = res_accept[sim_use, ],
+    res_accept = res_accept[sim_use, loc_accept],
     samp_info = samp_info,
     X = X,
     Z_kron = Z_kron, z = z)
