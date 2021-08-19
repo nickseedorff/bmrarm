@@ -17,6 +17,7 @@ random_slope = T; time_var = "time"; ar_cov = T;
 burn_in = 100; nsim = 5000; thin = 1; seed = 3;
 verbose = TRUE; sig_prior = 1000000000;
 sd_vec = c(0.15, 0.15)
+N_burn_trunc <- 10
 
 ## Create storage
 set.seed(seed)

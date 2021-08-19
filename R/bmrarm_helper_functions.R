@@ -198,7 +198,7 @@ bmrarm_start <- function(env) {
                     ar_cov = ar_cov, pat_time_ind = pat_time_ind,
                     uni_pat_time_ranks = uni_pat_time_ranks,
                     uni_pat_times = uni_pat_times,
-                    uni_dist_mat = uni_dist_mat)
+                    uni_dist_mat = uni_dist_mat, N_burn_trunc = N_burn_trunc)
 
   ## Store values
   res_ar <- rep(NA, nsim)

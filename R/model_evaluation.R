@@ -9,69 +9,71 @@
 
 get_DIC <- function(samps, marginal = TRUE) {
 
-  N_outcomes <- samps$samp_info$N_outcomes
-  z <- samps$z
-  miss_mat <- samps$samp_info$miss_mat
-  pat_idx <- samps$samp_info$pat_idx_long
-  pat_idx_long <- samps$samp_info$pat_idx_long
-  X <- samps$X
-  Z_kron <- samps$Z_kron
+  N_outcomes <- samps$data$samp_info$N_outcomes
+  z <- samps$data$z
+  miss_mat <- samps$data$samp_info$miss_mat
+  pat_idx <- samps$data$samp_info$pat_idx_long
+  pat_idx_long <- samps$data$samp_info$pat_idx_long
+  X <- samps$data$X
+  Z_kron <- samps$data$Z_kron
 
   ## Calculate mean deviance
-  mean_dev <- lapply(1:ncol(samps$res_beta), function(x){
-    beta_tmp <- matrix(samps$res_beta[, x], ncol = N_outcomes)
-    sig_tmp <- matrix(samps$res_sigma[, x], ncol = N_outcomes)
-    pat_eff <- samps$res_pat_eff[,, x]
-    y_use <- samps$res_y[,, x]
-    cuts_tmp <- samps$res_cuts[, x]
-    ar_tmp <- samps$res_ar[x]
+  mean_dev <- lapply(1:ncol(samps$draws$res_beta), function(x){
+    beta_tmp <- matrix(samps$draws$res_beta[, x], ncol = N_outcomes)
+    sig_tmp <- matrix(samps$draws$res_sigma[, x], ncol = N_outcomes)
+    pat_eff <- samps$draws$res_pat_eff[,, x]
+    y_use <- samps$draws$res_y[,, x]
+    cuts_tmp <- samps$draws$res_cuts[, x]
+    ar_tmp <- samps$draws$res_ar[x]
     if(!marginal) {
       cur_draws <- list(ar = ar_tmp, sigma = sig_tmp)
-      sig_list <- get_sig_list(cur_draws, samps$samp_info)
+      sig_list <- get_sig_list(cur_draws, samps$data$samp_info)
     } else {
-      pat_sig <- matrix(samps$res_pat_sig[, x], ncol = ncol(pat_eff))
+      pat_sig <- matrix(samps$draws$res_pat_sig[, x], ncol = ncol(pat_eff))
       cur_draws <- list(ar = ar_tmp, sigma = sig_tmp, pat_sig = pat_sig)
-      sig_list <- get_sig_list_marg(cur_draws, samps$samp_info)
+      sig_list <- get_sig_list_marg(cur_draws, samps$data$samp_info)
       pat_eff[] <- 0
     }
 
     for(j in 1:length(sig_list$marg_cov_list)) {
-      sig_list$marg_cov_inv_list[[j]] <- chol2inv(chol(sig_list$marg_cov_list[[j]]))
+      sig_list$marg_cov_inv_list[[j]] <-
+        chol2inv(chol(sig_list$marg_cov_list[[j]]))
     }
 
     dev_vals <- get_dev(
       y = y_use, X, z, Z_kron, pat_idx, pat_idx_long,
       beta = beta_tmp, sig_list, cuts = cuts_tmp, pat_eff = pat_eff,
-      miss_mat = miss_mat, samps$samp_info, marginal)
+      miss_mat = miss_mat, samps$data$samp_info, marginal)
   }) %>%
     unlist() %>%
     mean()
 
   ## Calculate deviance of the mean
-  beta_tmp <- matrix(rowMeans(samps$res_beta), ncol = N_outcomes)
-  sig_tmp <- matrix(rowMeans(samps$res_sigma), ncol = N_outcomes)
-  pat_eff <- apply(samps$res_pat_eff, c(1, 2), mean)
-  y_use <- apply(samps$res_y, c(1, 2), mean)
-  cuts_tmp <- rowMeans(samps$res_cuts)
-  ar_tmp <- mean(samps$res_ar)
+  beta_tmp <- matrix(rowMeans(samps$draws$res_beta), ncol = N_outcomes)
+  sig_tmp <- matrix(rowMeans(samps$draws$res_sigma), ncol = N_outcomes)
+  pat_eff <- apply(samps$draws$res_pat_eff, c(1, 2), mean)
+  y_use <- apply(samps$draws$res_y, c(1, 2), mean)
+  cuts_tmp <- rowMeans(samps$draws$res_cuts)
+  ar_tmp <- mean(samps$draws$res_ar)
   cur_draws <- list(ar = ar_tmp, sigma = sig_tmp)
   if(!marginal) {
     cur_draws <- list(ar = ar_tmp, sigma = sig_tmp)
-    sig_list <- get_sig_list(cur_draws, samps$samp_info)
+    sig_list <- get_sig_list(cur_draws, samps$data$samp_info)
   } else {
-    pat_sig <- matrix(rowMeans(samps$res_pat_sig), ncol = ncol(pat_eff))
+    pat_sig <- matrix(rowMeans(samps$draws$res_pat_sig), ncol = ncol(pat_eff))
     cur_draws <- list(ar = ar_tmp, sigma = sig_tmp, pat_sig = pat_sig)
-    sig_list <- get_sig_list_marg(cur_draws, samps$samp_info)
+    sig_list <- get_sig_list_marg(cur_draws, samps$data$samp_info)
     pat_eff[] <- 0
   }
 
   for(j in 1:length(sig_list$marg_cov_list)) {
-    sig_list$marg_cov_inv_list[[j]] <- chol2inv(chol(sig_list$marg_cov_list[[j]]))
+    sig_list$marg_cov_inv_list[[j]] <-
+      chol2inv(chol(sig_list$marg_cov_list[[j]]))
   }
 
   dev_of_means <- get_dev(
     y = y_use, X, z, Z_kron, pat_idx, pat_idx_long, beta = beta_tmp,
-    sig_list, cuts = cuts_tmp, pat_eff, miss_mat, samps$samp_info, marginal)
+    sig_list, cuts = cuts_tmp, pat_eff, miss_mat, samps$data$samp_info, marginal)
 
   ## Output DIC, D, pD
   pd <- mean_dev - dev_of_means

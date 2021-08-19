@@ -9,14 +9,12 @@ bmrvarx(
   data,
   ordinal_outcomes = c("y_ord", "y_bin"),
   sig_prior = 1e+06,
-  all_draws = FALSE,
   nsim = 1000,
   burn_in = 100,
   thin = 10,
   seed = 14,
-  verbose = TRUE,
   max_iter_rej = 500,
-  return_y = FALSE
+  N_burn_trunc = 10
 )
 }
 \arguments{
@@ -28,8 +26,6 @@ bmrvarx(
 
 \item{sig_prior}{prior variance on the regression coefficients}
 
-\item{all_draws}{logical with a default of FALSE which discards burn-in}
-
 \item{nsim}{positive integer, number of iterations with default of 1000}
 
 \item{burn_in}{positive integer, number of iterations to remove with default of 100. Must be >= 100.}
@@ -38,11 +34,13 @@ bmrvarx(
 
 \item{seed}{positive integer, seed for random number generation}
 
-\item{verbose}{logical, print iteration number to keep track of progress}
-
 \item{max_iter_rej}{maximum number of rejection algorithm attempts for multivariate truncated normal}
 
 \item{patient_var}{name of the patient or subject identifier}
+
+\item{all_draws}{logical with a default of FALSE which discards burn-in}
+
+\item{verbose}{logical, print iteration number to keep track of progress}
 }
 \value{
 mcmc

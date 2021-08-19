@@ -12,7 +12,9 @@ bmrarm_fc_patient_siw(
   samp_info,
   prior_list,
   Z_kron,
-  prior_siw_uni
+  prior_siw_uni,
+  prior_siw_df,
+  prior_siw_scale_mat
 )
 }
 \arguments{

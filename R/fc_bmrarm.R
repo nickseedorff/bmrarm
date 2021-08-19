@@ -124,7 +124,7 @@ bmrarm_fc_y_cuts <- function(y, z, X, Z_kron, cur_draws, samp_info) {
       y[locs, 1] <- rtmvnorm(
         1, mean = cond_mean[locs], H = sig_list$cond_cov_inv_list[[ind]],
         lower = cuts_low[locs], upper = cuts_high[locs], algorithm = "gibbs",
-        burn.in.samples = 10, start.value = start_val)
+        burn.in.samples = samp_info$N_burn_trunc, start.value = start_val)
     }
   } else {
     N_obs <- length(z)
@@ -332,7 +332,9 @@ dmatrix_normal_log <- function(resid_mat, cur_draws, samp_info, sig_list) {
 #' @return matrix
 #' @export
 
-bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list, Z_kron, prior_siw_uni) {
+bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list,
+                                  Z_kron, prior_siw_uni, prior_siw_df,
+                                  prior_siw_scale_mat) {
 
   ## Generate full sigma matrix
   N_pat <- samp_info$N_pat
@@ -372,7 +374,8 @@ bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list, Z_k
   }
 
   ## Correlation matrix
-  cur_draws$pat_sig_q <- rinvwishart(N_pat + N_pat_eff + 1, crossprod(res) + diag(rep(1, N_pat_eff)))
+  cur_draws$pat_sig_q <-
+    rinvwishart(N_pat + prior_siw_df, crossprod(res) + prior_siw_scale_mat)
 
   ## SD parameters
   accept_vec <- rep(0, N_pat_eff)
@@ -399,8 +402,10 @@ bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list, Z_k
 
     ## Calculate comparison values
     sig_list <- get_sig_list(cur_draws, samp_info)
-    comp_old <- dmatrix_normal_log(resid_mat_old, cur_draws, samp_info, sig_list)
-    comp_new <- dmatrix_normal_log(resid_mat_new, cur_draws2, samp_info, sig_list)
+    comp_old <- dmatrix_normal_log(resid_mat_old, cur_draws, samp_info,
+                                   sig_list)
+    comp_new <- dmatrix_normal_log(resid_mat_new, cur_draws2, samp_info,
+                                   sig_list)
     compar_val <- comp_new - comp_old +
       log(truncnorm::dtruncnorm(cur_draws$pat_sig_sd[i], prior_siw_uni[1],
                                 prior_siw_uni[2],
@@ -419,7 +424,8 @@ bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list, Z_k
   }
 
   list(pat_effects = res %*% diag(cur_draws$pat_sig_sd),
-       pat_sig = diag(cur_draws$pat_sig_sd) %*% cur_draws$pat_sig_q %*% diag(cur_draws$pat_sig_sd),
+       pat_sig = diag(cur_draws$pat_sig_sd) %*% cur_draws$pat_sig_q %*%
+         diag(cur_draws$pat_sig_sd),
        pat_sig_sd = cur_draws$pat_sig_sd, accept_vec = accept_vec,
        pat_sig_q = cur_draws$pat_sig_q)
 }

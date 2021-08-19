@@ -187,7 +187,7 @@ fc_y <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter) {
       y_current = y[, i], mean = d_vec, lower = cuts_low,
       upper = cuts_high, locs = iter_locs, loc_length = iter_length,
       pre_calcs = pre_calcs, max_iter = samp_info$max_iter, N_ord = num_ord,
-      burn_in = samp_info$burn_in, num_iter = num_iter, num_obs = i)
+      N_burn_trunc = samp_info$N_burn_trunc, num_iter = num_iter, num_obs = i)
   }
   t(y)
 }
@@ -205,7 +205,8 @@ fc_y <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter) {
 #' @importFrom MASS mvrnorm
 
 tmvn_gibbs_rej <- function(y_current, mean, lower, upper, locs, loc_length,
-                           pre_calcs, max_iter, N_ord, burn_in, num_iter, num_obs) {
+                           pre_calcs, max_iter, N_ord, N_burn_trunc, num_iter,
+                           num_obs) {
 
   ## Limit max iter the first 100 iterations
   if(num_iter <= 100) max_iter <- 100
@@ -231,10 +232,12 @@ tmvn_gibbs_rej <- function(y_current, mean, lower, upper, locs, loc_length,
 
     if(iter > max_iter) {
       start_val <- pmax(pmin(y_current[locs], upper), lower)
-      mean_vec <- as.vector(cond_mean_part(y_current, mean, pre_calcs$mean_pre, locs))
+      mean_vec <- as.vector(cond_mean_part(y_current, mean, pre_calcs$mean_pre,
+                                           locs))
       res <- rtmvnorm(
         1, mean = mean_vec, H = pre_calcs$cond_chol_inv, lower = lower,
-        upper = upper, algorithm = "gibbs", burn.in.samples = 10, start.value = start_val)
+        upper = upper, algorithm = "gibbs", burn.in.samples = N_burn_trunc,
+        start.value = start_val)
     }
   }
   res

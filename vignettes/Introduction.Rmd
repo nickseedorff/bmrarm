@@ -64,7 +64,7 @@ samps <- bmrvarx(formula = cbind(y_ord, y_ord2, y3) ~ x1,
                  ordinal_outcomes = c("y_ord", "y_ord2"), thin = 5,
                  max_iter_rej = 500)
 ```
-
+## Model Summary
 
 ## Get 4 step forecasts
 

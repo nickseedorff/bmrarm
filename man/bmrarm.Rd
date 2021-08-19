@@ -16,11 +16,12 @@ bmrarm(
   burn_in = 100,
   thin = 10,
   seed = 14,
-  verbose = TRUE,
   sig_prior = 1e+06,
   sd_vec = c(0.15, 0.3, rep(0.2, 4)),
   N_burn_trunc = 10,
-  prior_siw_uni = c(0.2, 5)
+  prior_siw_uni = c(0.2, 5),
+  prior_siw_df = NULL,
+  prior_siw_scale_mat = NULL
 )
 }
 \arguments{
@@ -38,13 +39,13 @@ bmrarm(
 
 \item{seed}{positive integer, seed for random number generation}
 
-\item{verbose}{logical, print iteration number to keep track of progress}
-
 \item{sig_prior}{prior variance on the regression coefficients}
 
 \item{ordinal_outcomes}{a character string containing the names of the ordinal outcomes}
 
 \item{all_draws}{logical with a default of FALSE which discards burn-in}
+
+\item{verbose}{logical, print iteration number to keep track of progress}
 
 \item{max_iter_rej}{maximum number of rejection algorithm attempts for multivariate truncated normal}
 }

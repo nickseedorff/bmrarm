@@ -111,7 +111,7 @@ get_sampling_info <- function(env) {
        pat_obs_sizes = pat_obs_sizes, all_same = all_same,
        N_response = N_response, N_patients = length(unique(pat_idx)),
        burn_in = burn_in, N_obs = N_obs, N_covars = N_covars,
-       N_base_covars = N_base_covars, nsim = nsim,
+       N_burn_trunc = N_burn_trunc, N_base_covars = N_base_covars, nsim = nsim,
        prior_base = diag(rep(1 / sig_prior, N_base_covars + N_response)),
        prior_non_base = diag(rep(1 / sig_prior, N_covars + N_response)))
 }
@@ -130,7 +130,6 @@ create_storage <- function(env) {
   res_cuts <- array(NA, c(max(N_cat) + 1, nsim, N_ord))
   res_latent <- array(NA, c(N_obs, nsim, N_ord))
   res_y <- array(NA, c(N_obs, N_response, nsim))
-  rej_accept_rate <- matrix(NA, ncol = nsim, nrow = 2)
 
   ## Initialize
   res_cuts[, 1, ] <- start_cuts(N_cat)

@@ -21,14 +21,15 @@
 bmrarm <- function(formula, data, ordinal_outcome = "y_ord",
                    time_var = "time", patient_var = "patient_idx",
                    random_slope = F, ar_cov = TRUE, nsim = 1000,
-                   burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
-                   sig_prior = 1000000,
-                   sd_vec = c(0.15, 0.30, rep(0.2, 4)),
-                   N_burn_trunc = 10, prior_siw_uni = c(0.2, 5)) {
+                   burn_in = 100, thin = 10, seed = 14,
+                   sig_prior = 1000000, sd_vec = c(0.15, 0.30, rep(0.2, 4)),
+                   N_burn_trunc = 10, prior_siw_uni = c(0.2, 5),
+                   prior_siw_df = NULL, prior_siw_scale_mat = NULL) {
 
   ## Create storage
   set.seed(seed)
   bmrarm_start(env = environment())
+  y_store <- y
   cont_out_var <- setdiff(out_vars, ordinal_outcome)
 
   ## Stopping rules
@@ -43,6 +44,11 @@ bmrarm <- function(formula, data, ordinal_outcome = "y_ord",
   if(length(cont_out_var) != 1) {
     stop("brmarm must be supplied one continous outcome")
   }
+
+  ## SIW priors
+  num_eff <- ncol(samp_info$pat_z_kron[[1]])
+  if(is.null(prior_siw_df)) prior_siw_df <- num_eff + 1
+  if(is.null(prior_siw_scale_mat)) prior_siw_scale_mat <- diag(num_eff)
 
   ## Starting values for ordinal outcome
   y[, 1] <- (res_cuts[z, 1] + res_cuts[z + 1, 1]) / 2
@@ -63,10 +69,9 @@ bmrarm <- function(formula, data, ordinal_outcome = "y_ord",
   y[, 2:ncol(y)] <- matrix(df$y_interp, ncol = N_outcomes - 1)
   y[is.na(y)] <- 0
 
-
+  ## Storage for MH acceptance
   res_accept <- matrix(NA, nsim, 6)
   loc_accept <- 1:(4 + 2 * random_slope)
-  samp_info$N_trunc_burn <- N_burn_trunc
 
   for(i in 2:nsim) {
     samp_info$num_iter <- i
@@ -85,7 +90,9 @@ bmrarm <- function(formula, data, ordinal_outcome = "y_ord",
     res_ar[i] <- cur_draws$ar
 
     ## Subject specific effects
-    vals <- bmrarm_fc_patient_siw(y, z, X, cur_draws, samp_info, 1, Z_kron, prior_siw_uni)
+    vals <- bmrarm_fc_patient_siw(y, z, X, cur_draws, samp_info, 1, Z_kron,
+                                  prior_siw_uni, prior_siw_df,
+                                  prior_siw_scale_mat)
     res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig
     res_pat_eff[,, i] <- cur_draws$pat_effects <- vals$pat_effects
     res_pat_sig_q[,i] <- cur_draws$pat_sig_q <- vals$pat_sig_q
@@ -117,6 +124,7 @@ bmrarm <- function(formula, data, ordinal_outcome = "y_ord",
     }
   }
 
+  ## Return posterior draws, data, sampling info
   sim_use <- seq(burn_in + 1, nsim, by = thin)
   draws <- list(
     res_cuts = res_cuts[, sim_use],
@@ -128,9 +136,9 @@ bmrarm <- function(formula, data, ordinal_outcome = "y_ord",
     res_sigma = res_sig[, sim_use],
     res_y = res_y[,, sim_use],
     res_pat_eff = res_pat_eff[,, sim_use],
-    res_accept = res_accept[sim_use, loc_accept],
-    samp_info = samp_info,
-    X = X,
-    Z_kron = Z_kron, z = z)
-  draws
+    res_accept = res_accept[sim_use, loc_accept])
+
+  data <- list(samp_info = samp_info, X = X,
+               Z_kron = Z_kron, z = z, y = y_store[, 2])
+  list(draws = draws, data = data)
 }

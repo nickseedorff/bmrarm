@@ -14,7 +14,7 @@ tmvn_gibbs_rej(
   pre_calcs,
   max_iter,
   N_ord,
-  burn_in,
+  N_burn_trunc,
   num_iter,
   num_obs
 )
