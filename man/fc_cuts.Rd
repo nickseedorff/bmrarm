@@ -4,7 +4,7 @@
 \alias{fc_cuts}
 \title{Full conditional draws for the threshold parameters}
 \usage{
-fc_cuts(y, z, N_cat)
+fc_cuts(y, z, N_cat, upper_cut_limit)
 }
 \arguments{
 \item{y}{matrix of multivariate observations}

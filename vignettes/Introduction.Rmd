@@ -1,0 +1,94 @@
+---
+title: "Introduction"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+# Setup
+
+
+```{r setup}
+library(bmrarm)
+```
+
+# bmrarm
+
+## Fit model with simulated data
+
+```{r}
+## Generate data
+sim_data <- bmrarm:::gen_ar_errors(N = 7, N_pat = 50, seed = 168, slope = T,
+                                   unequal = T, ar_cov = T)
+
+## Posterior sampling
+samps <- bmrarm(formula = cbind(y_ord, y2) ~ time, data = sim_data$data,
+                ordinal_outcome = "y_ord", patient_var = "pat_idx",
+                random_slope = T, time_var = "time", ar_cov = T,
+                burn_in = 20, nsim = 50, thin = 5, seed = 168,
+                sd_vec = c(0.14, 0.14, 0.35, 0.1, 0.23, 0.09))
+```
+
+## Get marginal and conditional DIC
+
+```{r}
+## Marginal DIC (preferred choice)
+get_DIC(samps)
+
+## Conditional DIC
+get_DIC(samps, marginal = FALSE)
+```
+
+# bmrvarx examples
+
+## Fit model with simulated data
+
+```{r}
+## Generate data with two ordinal and one continuous outcome
+sim_data <- bmrarm:::gen_single(N = 610, seed = 1)
+dat <- sim_data$data_no_miss %>%
+  filter(row_number() <= 500)
+
+## Posterior sampling
+samps <- bmrvarx(formula = cbind(y_ord, y_ord2, y3) ~ x1,
+                 data = dat, nsim = 250, burn_in = 100, seed = 1,
+                 ordinal_outcomes = c("y_ord", "y_ord2"), thin = 5,
+                 max_iter_rej = 500)
+```
+
+
+## Get 4 step forecasts
+
+```{r}
+## Need new matrix of X values (exclude the intercept)
+x_pred <- matrix(sim_data$data_no_miss$x1[501:504], ncol = 1)
+
+## Get predictions
+preds <- bmrarm:::get_preds_bmrvarx(samps, steps_ahead = 4, X = x_pred)
+
+## Summarize predictions for the continous outcome
+summ <- apply(preds$cont_preds[,3, ], 2, function(x) {
+    c(mean = mean(x), sd =sd(x), lower_CI = quantile(x, probs = 0.025),
+      upper_CI = quantile(x, probs = 0.975))
+  }) %>% t()
+cbind(Step = 1:4, round(summ, 3))
+
+## Summarize predictions for the first ordinal outcome
+summ <- apply(preds$ord_preds[,1, ], 2, function(x) {
+    c(Prob_1 = mean(x == 1),
+      Prob_2 = mean(x == 2),
+      Prob_3 = mean(x == 3),
+      Prob_4 = mean(x == 4))
+  }) %>% t()
+cbind(Step = 1:4, round(summ, 3))
+```
+

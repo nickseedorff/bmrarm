@@ -12,11 +12,12 @@ get_dev(
   pat_idx,
   pat_idx_long,
   beta,
-  sigma,
+  sig_list,
   cuts,
   pat_eff,
   miss_mat,
-  all_prob = FALSE
+  samp_info,
+  marginal
 )
 }
 \arguments{

@@ -7,7 +7,7 @@ test_that("bmrarm works as anticipated", {
                        data = sim_data$data, nsim = 400, burn_in = 200,
                        seed = 1,
                        ordinal_outcomes = c("y_ord"), thin = 1,
-                       max_iter_rej = 10000000, fast = T)
+                       max_iter_rej = 10000000)
 
 
 # Test brm_slope model against stored object ------------------------------
@@ -16,7 +16,7 @@ test_that("bmrarm works as anticipated", {
                        data = sim_data$data, nsim = 400, burn_in = 200,
                        seed = 1,
                        ordinal_outcomes = c("y_ord", "y_ord2"), thin = 1,
-                       max_iter_rej = 10000000, fast = T)
+                       max_iter_rej = 10000000)
 
 # Store results for later use or updating ---------------------------------
 

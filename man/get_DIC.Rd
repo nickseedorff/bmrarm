@@ -4,10 +4,10 @@
 \alias{get_DIC}
 \title{Get DIC}
 \usage{
-get_DIC(samps)
+get_DIC(samps, marginal = TRUE)
 }
 \arguments{
-\item{y_current}{current continuous outcome values}
+\item{y_current}{current continous outcome values}
 
 \item{mean_vec}{vector of mean values}
 
@@ -16,7 +16,7 @@ get_DIC(samps)
 \item{ord_loc}{number of ordinal outcomes}
 }
 \value{
-scalar
+vector
 }
 \description{
 Get DIC

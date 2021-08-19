@@ -4,7 +4,7 @@
 \alias{fc_y}
 \title{Full conditional draws of the latent continuous values}
 \usage{
-fc_y(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter, fast)
+fc_y(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter)
 }
 \arguments{
 \item{y}{matrix of multivariate observations}

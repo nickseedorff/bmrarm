@@ -16,8 +16,7 @@ ordinal_outcome = "y_ord"; patient_var = "pat_idx";
 random_slope = T; time_var = "time"; ar_cov = T;
 burn_in = 100; nsim = 5000; thin = 1; seed = 3;
 verbose = TRUE; sig_prior = 1000000000;
-sd_vec = c(0.15, 0.30, 0.35, 0.1, 0.25, 0.1)
-sd_vec[3:6] <- sd_vec[3:6] * 1
+sd_vec = c(0.15, 0.15)
 
 ## Create storage
 set.seed(seed)

@@ -30,7 +30,35 @@ expansion_prior <- function(cor_mat, N_ordinal) {
 #' @import dplyr
 #' @export
 
-fc_sigma_theta_tilde <- function(y, X, prior_precision, y_orig, old_prior_y0) {
+fc_sigma_theta_tilde <- function(y, X, prior_precision, y_orig) {
+  N_outcome <- ncol(y)
+  w_tmp <- y
+  X_tilde <- cbind(X, rbind(rep(0, N_outcome), y_orig[-nrow(y), ]))
+
+  ## Find theta hat
+  x_inv <- chol2inv(chol(prior_precision + crossprod(X_tilde)))
+  theta_hat <- x_inv %*% t(X_tilde) %*% w_tmp
+
+  ## sigma_draw draw
+  val <- crossprod(w_tmp) + diag(rep(1, N_outcome)) -
+    t(w_tmp) %*% X_tilde %*% theta_hat
+  sig_draw <- rinvwishart(nrow(w_tmp) + N_outcome + 1, val)
+
+  ## effects_draw
+  theta <- rmatrixnorm(M = theta_hat, V = sig_draw, U = x_inv)
+  list(sigma_tilde = sig_draw, theta_tilde = theta)
+}
+
+#' Full conditional draws of the regression coefficients
+#'
+#' @param y matrix of multivariate observations
+#' @param X design matrix
+#' @param prior_precision prior precision matrix
+#' @return matrix
+#' @importFrom LaplacesDemon rinvwishart rmatrixnorm
+#' @import dplyr
+
+fc_sigma_theta_tilde_bvar <- function(y, X, prior_precision, y_orig, old_prior_y0) {
   N_outcome <- ncol(y)
   w_tmp <- y
   X_tilde <- cbind(X, rbind(rep(0, N_outcome), y_orig[-nrow(y), ]))
@@ -98,7 +126,7 @@ fc_cuts <- function(y, z, N_cat, upper_cut_limit) {
 #' @return matrix
 #' @export
 
-fc_y <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter, fast) {
+fc_y <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter) {
 
   ## Current parameter values
   sig <- tmp_list$sigma

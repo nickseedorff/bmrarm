@@ -18,11 +18,11 @@
 #' @importFrom magic adiag
 #' @export
 
-bmrarm <- function(formula, data, ordinal_outcome = c("y_ord"),
+bmrarm <- function(formula, data, ordinal_outcome = "y_ord",
                    time_var = "time", patient_var = "patient_idx",
                    random_slope = F, ar_cov = TRUE, nsim = 1000,
                    burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
-                   sig_prior = 1000000000,
+                   sig_prior = 1000000,
                    sd_vec = c(0.15, 0.30, rep(0.2, 4)),
                    N_burn_trunc = 10, prior_siw_uni = c(0.2, 5)) {
 
@@ -30,6 +30,19 @@ bmrarm <- function(formula, data, ordinal_outcome = c("y_ord"),
   set.seed(seed)
   bmrarm_start(env = environment())
   cont_out_var <- setdiff(out_vars, ordinal_outcome)
+
+  ## Stopping rules
+  if(nsim <= burn_in) {
+    stop("nsim must be > than burn_in")
+  }
+
+  if(length(ordinal_outcome) > 1) {
+    stop("brmarm only allows one ordinal outcome")
+  }
+
+  if(length(cont_out_var) != 1) {
+    stop("brmarm must be supplied one continous outcome")
+  }
 
   ## Starting values for ordinal outcome
   y[, 1] <- (res_cuts[z, 1] + res_cuts[z + 1, 1]) / 2
@@ -88,11 +101,20 @@ bmrarm <- function(formula, data, ordinal_outcome = c("y_ord"),
     ## Update missing values
     y <- res_y[,, i]<- bmrarm_fc_missing(y, z, X, Z_kron, cur_draws, samp_info)
 
-    ## Cut points
-    #if(i %% 150 == 100) plot(res_cuts[4, ], type = "l")
-    #if(i %% 150 == 100) plot(res_pat_sig_sd[1, ], type = "l")
-    if(i %% 150 == 50 & i > burn_in) print(round(c(colMeans(res_accept[(burn_in+1):nsim, loc_accept], na.rm = T), i), 3))
-    if(i %% 150 == 0) plot(res_pat_sig[1, ], type = "l")
+    ## Print output
+    seqq <- seq(1, nsim, nsim / 10)
+    if(i %in% seqq) {
+      if(i > burn_in) {
+        cat("Iteration = ", i, "\n")
+        vec <- round(colMeans(res_accept[(burn_in+1):nsim, loc_accept],
+                              na.rm = T), 2)
+        cat("MH Acceptance ratios: \u03b3 = ", vec[1], "; ",
+            "\u03c1 = ", vec[2], "; ",
+            "\u03be = ", paste(vec[3:length(vec)], collapse = ", "), "\n", sep = "")
+      } else {
+        cat("Iteration = ", i, "\n")
+      }
+    }
   }
 
   sim_use <- seq(burn_in + 1, nsim, by = thin)

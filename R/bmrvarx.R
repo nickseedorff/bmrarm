@@ -21,7 +21,11 @@
 bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
                     sig_prior = 1000000, all_draws = FALSE, nsim = 1000,
                     burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
-                    max_iter_rej = 500, return_y = FALSE, fast = T, old_prior_y0 = F) {
+                    max_iter_rej = 500, return_y = FALSE) {
+
+  if(burn_in < 100) {
+    stop("burn_in must be >= 100")
+  }
 
   ## Extract outcome variables, record missing values
   out_vars <- setdiff(all.vars(formula),
@@ -57,16 +61,9 @@ bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
     mean_mat <- covars %*% tmp_list$beta
 
     ## Draw latent variables
-    if(!old_prior_y0) {
-      y_use <- res_y[,, i] <- fc_y(
-        y = t(y_use), z = y_ord, mean_mat = t(mean_mat), tmp_list = tmp_list,
-        miss_mat = miss_mat, samp_info = samp_info, num_iter = i, fast = fast)
-    } else {
-      covars[1, ] <- 0
-      y_use <- res_y[,, i] <- fc_y_old(
-        y = t(y_use), z = y_ord, mean_mat = t(mean_mat), tmp_list = tmp_list,
-        miss_mat = miss_mat, samp_info = samp_info, num_iter = i, fast = fast)
-    }
+    y_use <- res_y[,, i] <- fc_y(
+      y = t(y_use), z = y_ord, mean_mat = t(mean_mat), tmp_list = tmp_list,
+      miss_mat = miss_mat, samp_info = samp_info, num_iter = i)
 
     ## Draw expansion parameters from prior and transform data
     D_prior <- expansion_prior(cor_mat, N_ordinal = N_ord)
@@ -74,8 +71,7 @@ bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
 
     ## Covariance matrix
     sig_theta <- fc_sigma_theta_tilde(y = w_use, X = covars, y_orig = y_use,
-                                      prior_precision = samp_info$prior_non_base,
-                                      old_prior_y0)
+                                      prior_precision = samp_info$prior_non_base)
     sigma_tilde <- sig_theta$sigma_tilde
 
     ## M and beta
@@ -197,9 +193,9 @@ bvar <- function(formula, data, sig_prior = 1000000, all_draws = FALSE,
   for(i in 2:nsim) {
 
     ## Covariance matrix
-    sig_theta <- fc_sigma_theta_tilde(y = y_use, X = covars, y_orig = y_use,
-                                      prior_precision = samp_info$prior_non_base,
-                                      old_prior_y0 = T)
+    sig_theta <- fc_sigma_theta_tilde_bvar(y = y_use, X = covars, y_orig = y_use,
+                                           prior_precision = samp_info$prior_non_base,
+                                           old_prior_y0 = T)
     sigma_tilde <- sig_theta$sigma_tilde
 
     ## M and beta
