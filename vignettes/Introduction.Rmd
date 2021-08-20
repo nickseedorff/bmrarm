@@ -19,6 +19,7 @@ knitr::opts_chunk$set(
 
 ```{r setup}
 library(bmrarm)
+library(dplyr)
 ```
 
 # bmrarm
@@ -34,7 +35,7 @@ sim_data <- bmrarm:::gen_ar_errors(N = 7, N_pat = 50, seed = 168, slope = T,
 samps <- bmrarm(formula = cbind(y_ord, y2) ~ time, data = sim_data$data,
                 ordinal_outcome = "y_ord", patient_var = "pat_idx",
                 random_slope = T, time_var = "time", ar_cov = T,
-                burn_in = 20, nsim = 50, thin = 5, seed = 168,
+                burn_in = 5, nsim = 10, thin = 1, seed = 168,
                 sd_vec = c(0.14, 0.14, 0.35, 0.1, 0.23, 0.09))
 ```
 
@@ -48,23 +49,34 @@ get_DIC(samps)
 get_DIC(samps, marginal = FALSE)
 ```
 
+## Model Summary
+
+```{r}
+bmrarm_summary(samps)
+```
+
 # bmrvarx examples
 
 ## Fit model with simulated data
 
 ```{r}
 ## Generate data with two ordinal and one continuous outcome
-sim_data <- bmrarm:::gen_single(N = 610, seed = 1)
+sim_data <- bmrarm:::gen_single(N = 610, seed = 167)
 dat <- sim_data$data_no_miss %>%
   filter(row_number() <= 500)
 
 ## Posterior sampling
 samps <- bmrvarx(formula = cbind(y_ord, y_ord2, y3) ~ x1,
-                 data = dat, nsim = 250, burn_in = 100, seed = 1,
-                 ordinal_outcomes = c("y_ord", "y_ord2"), thin = 5,
+                 data = dat, nsim = 150, burn_in = 100, seed = 1,
+                 ordinal_outcomes = c("y_ord", "y_ord2"), thin = 1,
                  max_iter_rej = 500)
 ```
 ## Model Summary
+
+```{r}
+bmrvarx_summary <- summary(samps)
+```
+
 
 ## Get 4 step forecasts
 

@@ -4,14 +4,8 @@ i <- 3
 sim_data <- gen_ar_errors(N = 6, N_pat = 35, unequal = F, seed = 4,
                           slope = T, ar_cov = T)
 
-
-crossprod(sim_data$alpha) / nrow(sim_data$alpha)
-
-
-crossprod(MASS::mvrnorm(100, mu = c(0, 0, 0, 0) ,Sigma = sim_data$sig_alpha)) / 100
-
-
-formula = cbind(y_ord, y2) ~ time; data = sim_data$data;
+sim_data$data$cat_var <- sample(c("A", "B", "C"), size = length(sim_data$data$y1), replace = T)
+formula = cbind(y_ord, y2) ~ time + cat_var; data = sim_data$data;
 ordinal_outcome = "y_ord"; patient_var = "pat_idx";
 random_slope = T; time_var = "time"; ar_cov = T;
 burn_in = 100; nsim = 5000; thin = 1; seed = 3;

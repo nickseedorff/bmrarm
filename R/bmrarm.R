@@ -32,11 +32,13 @@ bmrarm <- function(formula, data, ordinal_outcome = "y_ord",
   y_store <- y
   cont_out_var <- setdiff(out_vars, ordinal_outcome)
 
-  ## Stopping rules
+  # Stopping rules ----------------------------------------------------------
+
   if(nsim <= burn_in) {
     stop("nsim must be > than burn_in")
   }
 
+  ## Current implementation has only tested one ordinal and one continuous
   if(length(ordinal_outcome) > 1) {
     stop("brmarm only allows one ordinal outcome")
   }
@@ -44,6 +46,18 @@ bmrarm <- function(formula, data, ordinal_outcome = "y_ord",
   if(length(cont_out_var) != 1) {
     stop("brmarm must be supplied one continous outcome")
   }
+
+  ## Ensure ordinal outcome is based on equally spaced integers
+  if(!all(min(z, na.rm = T):max(z, na.rm = T) ==
+          1:length(setdiff(unique(z), NA)))) {
+    stop("
+    The ordinal outcome must be integer valued, start at 1, be incremented by 1,
+    and no integers can be missing. For example, a 5 level ordinal outcome must
+    take the values 1, 2, 3, 4, or 5. There must be at least one observation for
+    each value.")
+  }
+
+  # -------------------------------------------------------------------------
 
   ## SIW priors
   num_eff <- ncol(samp_info$pat_z_kron[[1]])
@@ -72,6 +86,7 @@ bmrarm <- function(formula, data, ordinal_outcome = "y_ord",
   ## Storage for MH acceptance
   res_accept <- matrix(NA, nsim, 6)
   loc_accept <- 1:(4 + 2 * random_slope)
+  seqq <- seq(0, nsim, length.out = 11)
 
   for(i in 2:nsim) {
     samp_info$num_iter <- i
@@ -109,7 +124,6 @@ bmrarm <- function(formula, data, ordinal_outcome = "y_ord",
     y <- res_y[,, i]<- bmrarm_fc_missing(y, z, X, Z_kron, cur_draws, samp_info)
 
     ## Print output
-    seqq <- seq(1, nsim, nsim / 10)
     if(i %in% seqq) {
       if(i > burn_in) {
         cat("Iteration = ", i, "\n")
@@ -140,5 +154,5 @@ bmrarm <- function(formula, data, ordinal_outcome = "y_ord",
 
   data <- list(samp_info = samp_info, X = X,
                Z_kron = Z_kron, z = z, y = y_store[, 2])
-  list(draws = draws, data = data)
+  structure(list(draws = draws, data = data), class = "bmrarm")
 }

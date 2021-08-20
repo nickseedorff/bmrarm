@@ -70,21 +70,6 @@ start_cuts <- function(N_cats, fixed = 1) {
 get_sampling_info <- function(env) {
   list2env(as.list(env, all.names = T), envir = environment())
 
-  ## First observation for each subject
-  subj_vec <- as.numeric(as.factor(pat_idx))
-  pat_obs <- group_by(as.data.frame(pat_idx), pat_idx) %>%
-    mutate(first = row_number() == 1,
-           last = row_number() == n(),
-           n = n())
-
-  ## Vector to find help identify baseline and last observations
-  first_obs <- pat_obs$first
-  first_obs_num <- which(first_obs)
-  last_obs <- pat_obs$last
-  last_obs_num <- which(last_obs)
-  pat_obs_sizes <- unique(pat_obs$n)
-  all_same <- length(pat_obs_sizes) == 1
-
   ## Info about what outcomes to sample
   samp_type <- vector(length = N_obs)
   for(i in 1:N_obs) {
@@ -105,15 +90,10 @@ get_sampling_info <- function(env) {
   }
 
   list(samp_type = samp_type, samp_locs = samp_locs, samp_length = samp_length,
-       num_ord = N_ord, first_obs = first_obs, last_obs = last_obs,
-       first_obs_num = first_obs_num, last_obs_num = last_obs_num,
-       max_iter = max_iter_rej, subj_vec = subj_vec, pat_idx = pat_idx,
-       pat_obs_sizes = pat_obs_sizes, all_same = all_same,
-       N_response = N_response, N_patients = length(unique(pat_idx)),
+       num_ord = N_ord, max_iter = max_iter_rej, N_response = N_response,
        burn_in = burn_in, N_obs = N_obs, N_covars = N_covars,
-       N_burn_trunc = N_burn_trunc, N_base_covars = N_base_covars, nsim = nsim,
-       prior_base = diag(rep(1 / sig_prior, N_base_covars + N_response)),
-       prior_non_base = diag(rep(1 / sig_prior, N_covars + N_response)))
+       N_burn_trunc = N_burn_trunc, nsim = nsim,
+       prior_sig = diag(rep(1 / sig_prior, N_covars + N_response)))
 }
 
 #' Create storage for all samples in the time series setting

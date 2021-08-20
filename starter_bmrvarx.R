@@ -12,6 +12,7 @@ data = dat;nsim = 500; burn_in = 100; seed = 1;
 ordinal_outcomes = c("y_ord", "y_ord2");thin = 1;
 max_iter_rej = 10000000; sig_prior = 1000000;
 i <- 1
+N_burn_trunc <- 10
 
 y <- cbind(dat$y1, dat$y2, dat$y3)
 tmp_list$beta <- sim_data$beta

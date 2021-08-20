@@ -58,7 +58,7 @@ get_sig_list <- function(cur_draws, samp_info) {
 #'
 #' @param env parent environment
 
-get_sig_list_marg<- function(cur_draws, samp_info) {
+get_sig_list_marg <- function(cur_draws, samp_info) {
   chol_list <- marg_cov_list <- sig_list <-
     cond_cov_inv_list <- mean_pre_list <- cond_cov_list <- time_inv <-
     time_det <- list()
@@ -103,7 +103,7 @@ bmrarm_start <- function(env) {
   time_vec <- data[, time_var]
 
   ## Extract outcomes
-  out_vars <- setdiff(all.vars(formula), colnames(X))
+  out_vars <- setdiff(all.vars(formula), labels(terms(formula)))
   ord_loc <- which(out_vars == ordinal_outcome)
   z <- data[, out_vars[ord_loc]]
   y_cont <- data[, out_vars[-ord_loc]]

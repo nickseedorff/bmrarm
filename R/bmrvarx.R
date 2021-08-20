@@ -22,19 +22,38 @@ bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
                     sig_prior = 1000000, nsim = 1000, burn_in = 100, thin = 10,
                     seed = 14, max_iter_rej = 500, N_burn_trunc = 10) {
 
+  ## Extract outcome variables, record missing values
+  out_vars <- setdiff(all.vars(formula), labels(terms(formula)))
+  dat_out <- data[, c(ordinal_outcomes, setdiff(out_vars, ordinal_outcomes))]
+  y_ord <- as.matrix(dat_out[, ordinal_outcomes, drop = FALSE])
+
+  # Stopping rules ----------------------------------------------------------
+
   if(burn_in < 100) {
     stop("burn_in must be >= 100")
   }
 
-  ## Extract outcome variables, record missing values
-  out_vars <- setdiff(all.vars(formula),
-                      attr(terms(formula), which = "term.labels"))
-  dat_out <- data[, c(ordinal_outcomes, setdiff(out_vars, ordinal_outcomes))]
-  y_ord <- as.matrix(dat_out[, ordinal_outcomes, drop = FALSE])
-  y_ord[is.na(y_ord)] <- -10000
-  miss_mat <- matrix(as.numeric(is.na(dat_out)), ncol = length(out_vars))
+  ## Ensure ordinal outcomes are based on equally spaced integers
+  ord_correct_vec <- rep(NA, length = ncol(y_ord))
+  for(i in 1:length(ord_correct_vec)) {
+    z <- y_ord[, i]
+    ord_correct_vec[i] <- all(min(z, na.rm = T):max(z, na.rm = T) ==
+                                1:length(setdiff(unique(z), NA)))
+  }
+
+  if(!all(ord_correct_vec)) {
+    stop("
+    The ordinal outcomes must be integer valued, start at 1, be incremented by
+    1, and no integers can be missing. For example, a 5 level ordinal outcome
+    must take the values 1, 2, 3, 4, or 5. There must be at least one
+    observation for each value.")
+  }
+
+  # -------------------------------------------------------------------------
 
   ## Starting values are linearly interpolated, initial or final values set to 0
+  y_ord[is.na(y_ord)] <- -10000
+  miss_mat <- matrix(as.numeric(is.na(dat_out)), ncol = length(out_vars))
   dat_out <- apply(dat_out, 2, function(x) na.approx(x, na.rm = F))
   dat_out[is.na(dat_out)] <- 0
   data[, colnames(dat_out)] <- dat_out
@@ -48,12 +67,11 @@ bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
   N_obs <- nrow(dat_out)
   covars <- model.matrix(as.formula(formula), data = data)
   N_covars <- ncol(covars)
-  N_base_covars <- 0
-  pat_idx <- rep(1, N_obs)
 
   ## Get sampling info, initialize, generate storage
   samp_info <- get_sampling_info(env = environment())
   create_storage(env = environment())
+  seqq <- seq(0, nsim, length.out = 11)
 
   ## Run simulation
   for(i in 2:nsim) {
@@ -70,12 +88,12 @@ bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
 
     ## Covariance matrix
     sig_theta <- fc_sigma_theta_tilde(y = w_use, X = covars, y_orig = y_use,
-                                      prior_precision = samp_info$prior_non_base)
+                                      prior_precision = samp_info$prior_sig)
     sigma_tilde <- sig_theta$sigma_tilde
 
     ## M and beta
     beta_tilde <- sig_theta$theta_tilde[1:N_covars, ]
-    M_tilde <- t(sig_theta$theta_tilde[(N_covars + 1):(N_covars + N_response), ])
+    M_tilde <- t(sig_theta$theta_tilde[(N_covars + 1):(N_covars + N_response),])
 
     ## Update cuts
     upper_cut_limit <- sqrt(diag(sigma_tilde)) * 10000
@@ -104,9 +122,9 @@ bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
     cor_mat <- cov2cor(sigma_tilde)
 
     ## Iterations update, keep track of working parameter
-    if(i %% 50 == 0) cat(paste0("Iteration = ", i, "; expansion parameters = ",
-                                paste(round(diag(v_half)[1:N_ord], 3),
-                                      collapse = "; ")), "\n")
+    if(i %in% seqq) cat(paste0("Iteration = ", i, "; expansion parameters = ",
+                               paste(round(diag(v_half)[1:N_ord], 3),
+                                     collapse = "; ")), "\n")
   }
 
   ## Return draws after burn in
@@ -118,10 +136,11 @@ bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
                 res_y = res_y[,, sim_use])
 
   ## Return final observation for future forecasts, posterior draws
-  data_for_forecasts <- list(last_y = res_y[samp_info$last_obs_num, , sim_use])
-  list(draws = draws, data_for_forecasts = data_for_forecasts,
-       covars_used = colnames(covars), X = covars,
-       y = data[, c(ordinal_outcomes, setdiff(out_vars, ordinal_outcomes))])
-
+  data_for_forecasts <- list(last_y = res_y[samp_info$N_obs, , sim_use])
+  structure(list(draws = draws, data_for_forecasts = data_for_forecasts,
+                 covars_used = colnames(covars), X = covars,
+                 y = data[, c(ordinal_outcomes,
+                              setdiff(out_vars, ordinal_outcomes))]),
+            class = "bmrvarx")
 }
 
