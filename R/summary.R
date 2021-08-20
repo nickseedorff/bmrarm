@@ -12,7 +12,7 @@ summary.bmrarm <- function(x, digits = 3) {
     effect = rep(colnames(x$data$X), 2),
     round(summ(x$draws$res_beta), digits))
 
-  cat("\u0392 estimates")
+  cat("beta estimates")
   print(knitr::kable(df_b, align = "llccccc"))
 
   ## Covariance matrix
@@ -22,7 +22,7 @@ summary.bmrarm <- function(x, digits = 3) {
     round(summ(rbind(x$draws$res_sigma,
                      x$draws$res_ar)), digits))
 
-  cat("\n R and \u03C1 estimates")
+  cat("\n R and rho estimates")
   print(knitr::kable(df_s, align = "lccccc"))
 
   ## Covariance matrix
@@ -41,7 +41,7 @@ summary.bmrarm <- function(x, digits = 3) {
     parameter_descrip = descrip_vec,
     round(summ(x$draws$res_sigma), digits))
 
-  cat("\n \u03A3_\U03B1 estimates (random effects covariance matrix)")
+  cat("\n Sigma_alpha estimates (random effects covariance matrix)")
   print(knitr::kable(df_pat, align = "llccccc"))
 
   ## Cut points
@@ -51,7 +51,7 @@ summary.bmrarm <- function(x, digits = 3) {
     parameter = paste0("Cutpoint_", locs - 1),
     round(summ(x$draws$res_cuts[locs,]), digits))
 
-  cat("\n \u03B3 (cutpoint) estimates")
+  cat("\n gamma (cutpoint) estimates")
   print(knitr::kable(df_cut, align = "lccccc"))
 
   list(beta = df_b, cov = df_s, rand_cov = df_pat, cuts = df_cut)
@@ -73,7 +73,7 @@ summary.bmrvarx <- function(x, digits = 3) {
     effect = rep(x$covars_used, N_outcomes),
     round(summ(x$draws$res_beta), digits))
 
-  cat("\u0392 estimates")
+  cat("beta estimates")
   print(knitr::kable(df_b, align = "llccccc"))
 
   ## M coefficients
@@ -91,7 +91,7 @@ summary.bmrvarx <- function(x, digits = 3) {
                                        1, paste0, collapse = "")),
     round(summ(x$draws$res_sigma), digits))
 
-  cat("\n \u03A3 estimates")
+  cat("\n Sigma estimates (between response covariance matrix)")
   print(knitr::kable(df_s, align = "lccccc"))
 
   ## Cut points
@@ -102,7 +102,7 @@ summary.bmrvarx <- function(x, digits = 3) {
       parameter = paste0("Cutpoint_", locs - 1),
       round(summ(x$draws$res_cuts[locs,]), digits))
 
-    cat("\n \u03B3 (cutpoint) estimates")
+    cat("\n gamma (cutpoint) estimates")
     print(knitr::kable(df_cut, align = "lccccc"))
   } else {
     df_cut <- list()
@@ -114,7 +114,7 @@ summary.bmrvarx <- function(x, digits = 3) {
         round(summ(x$draws$res_cuts[locs,, i]), digits))
       df_cut[[i]] <- df_tmp
 
-      cat("\n", names(x$y)[i], "\u03B3 (cutpoint) estimates")
+      cat("\n", names(x$y)[i], "gamma (cutpoint) estimates")
       print(knitr::kable(df_tmp, align = "lccccc"))
     }
   }

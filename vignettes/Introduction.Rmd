@@ -51,8 +51,8 @@ get_DIC(samps, marginal = FALSE)
 
 ## Model Summary
 
-```{r}
-bmrarm_summary(samps)
+```{r results = 'asis'}
+bmrarm_summary <- summary(samps)
 ```
 
 # bmrvarx examples
@@ -73,7 +73,7 @@ samps <- bmrvarx(formula = cbind(y_ord, y_ord2, y3) ~ x1,
 ```
 ## Model Summary
 
-```{r}
+```{r results = 'asis'}
 bmrvarx_summary <- summary(samps)
 ```
 
