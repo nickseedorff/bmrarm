@@ -29,10 +29,6 @@ bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
 
   # Stopping rules ----------------------------------------------------------
 
-  if(burn_in < 100) {
-    stop("burn_in must be >= 100")
-  }
-
   ## Ensure ordinal outcomes are based on equally spaced integers
   ord_correct_vec <- rep(NA, length = ncol(y_ord))
   for(i in 1:length(ord_correct_vec)) {

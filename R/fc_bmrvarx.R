@@ -208,9 +208,6 @@ tmvn_gibbs_rej <- function(y_current, mean, lower, upper, locs, loc_length,
                            pre_calcs, max_iter, N_ord, N_burn_trunc, num_iter,
                            num_obs) {
 
-  ## Limit max iter the first 100 iterations
-  if(num_iter <= 100) max_iter <- 100
-
   ## If missing a single ordinal outcome then sample from truncated normal
   if(loc_length == 1) {
     res <- rtruncnorm(

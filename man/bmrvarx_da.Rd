@@ -9,16 +9,11 @@ bmrvarx_da(
   data,
   ordinal_outcomes = c("y_ord", "y_bin"),
   sig_prior = 1e+06,
-  all_draws = FALSE,
   nsim = 1000,
   burn_in = 100,
   thin = 10,
   seed = 14,
-  verbose = TRUE,
-  max_iter_rej = 500,
-  return_y = FALSE,
-  fast = F,
-  old_prior_y0 = F
+  max_iter_rej = 500
 )
 }
 \arguments{

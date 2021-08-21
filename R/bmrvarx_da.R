@@ -10,9 +10,9 @@
 #' @importFrom zoo na.approx
 
 bmrvarx_da <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
-                      sig_prior = 1000000, all_draws = FALSE, nsim = 1000,
-                      burn_in = 100, thin = 10, seed = 14, verbose = TRUE,
-                      max_iter_rej = 500, return_y = FALSE, fast = F, old_prior_y0 = F) {
+                      sig_prior = 1000000, nsim = 1000,
+                      burn_in = 100, thin = 10, seed = 14,
+                      max_iter_rej = 500) {
 
   ## Extract outcome variables, record missing values
   out_vars <- setdiff(all.vars(formula),
@@ -55,12 +55,11 @@ bmrvarx_da <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
     ## Draw latent variables
     y_use <- res_y[,, i] <- fc_y(
       y = t(y_use), z = y_ord, mean_mat = t(mean_mat), tmp_list = tmp_list,
-      miss_mat = miss_mat, samp_info = samp_info, num_iter = i, fast = fast)
+      miss_mat = miss_mat, samp_info = samp_info, num_iter = i)
 
     ## Sigma and effects
     sig_theta <- fc_sigma_theta_tilde(y = y_use, X = covars, y_orig = y_use,
-                                      prior_precision = samp_info$prior_sig,
-                                      old_prior_y0)
+                                      prior_precision = samp_info$prior_sig)
     sigma_tilde <- sig_theta$sigma_tilde
 
     ## M and beta
@@ -91,16 +90,10 @@ bmrvarx_da <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
   }
 
   sim_use <- seq(burn_in + 1, nsim, by = thin)
-  all <- list(res_M = res_M,
-              res_sigma = res_sigma,
-              res_beta = res_beta,
-              res_cuts = res_cuts)
-
   draws <- list(res_M = res_M[, sim_use],
                 res_sigma = res_sigma[, sim_use],
                 res_beta = res_beta[, sim_use],
-                res_cuts = res_cuts[, sim_use, ],
-                rej_accept_rate = t(rej_accept_rate))
+                res_cuts = res_cuts[, sim_use, ])
 
   ## Return final observation for future forecasts, posterior draws
   data_for_forecasts <- list(last_y = res_y[samp_info$N_obs, , sim_use])
