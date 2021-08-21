@@ -8,7 +8,7 @@
 #' @importFrom MASS mvrnorm
 #' @export
 
-get_preds_bmrvarx <- function(bmrvarx_obj, steps_ahead = 5, X, seed = 15) {
+get_preds_bmrvarx <- function(bmrvarx_obj, steps_ahead = 5, X, seed = 15, get_ord_preds = T) {
   set.seed(seed)
   ## Relevant data
   latent_draws <- t(as.matrix(bmrvarx_obj$data_for_forecasts[[1]][1:2, ]))
@@ -41,7 +41,6 @@ get_preds_bmrvarx <- function(bmrvarx_obj, steps_ahead = 5, X, seed = 15) {
     M <- matrix(M_draws[, i], ncol = N_outcomes)
     sigma <- matrix(sigma_draws[, i], ncol = N_outcomes)
     beta <- matrix(beta_draws[, i], ncol = N_outcomes)
-    cuts <- matrix(cut_draws[, i, ], ncol = N_ord)
     for(j in 1:steps_ahead) {
       if(j == 1) {
         mean_val <- crossprod(beta, X_use[j, ]) + M %*% c(latent_draws[i, ], y_cont)
@@ -51,9 +50,12 @@ get_preds_bmrvarx <- function(bmrvarx_obj, steps_ahead = 5, X, seed = 15) {
       cont_preds[i, , j] <- mvrnorm(1, mean_val, Sigma = sigma)
     }
 
-    for(j in 1:N_ord) {
-      for(k in 1:steps_ahead) {
-        ord_preds[i,j, k] <- cont_to_cat(cont_preds[i,j, k], cuts[, j])
+    if(get_ord_preds) {
+      cuts <- matrix(cut_draws[, i, ], ncol = N_ord)
+      for(j in 1:N_ord) {
+        for(k in 1:steps_ahead) {
+          ord_preds[i,j, k] <- cont_to_cat(cont_preds[i, j, k], cuts[, j])
+        }
       }
     }
   }

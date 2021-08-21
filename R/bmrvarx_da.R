@@ -38,6 +38,7 @@ bmrvarx_da <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
   N_covars <- ncol(covars)
   N_base_covars <- 0
   pat_idx <- rep(1, N_obs)
+  N_burn_trunc <- 0
 
   ## Get sampling info, initialize, generate storage
   samp_info <- get_sampling_info(env = environment())
@@ -58,7 +59,7 @@ bmrvarx_da <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
 
     ## Sigma and effects
     sig_theta <- fc_sigma_theta_tilde(y = y_use, X = covars, y_orig = y_use,
-                                      prior_precision = samp_info$prior_non_base,
+                                      prior_precision = samp_info$prior_sig,
                                       old_prior_y0)
     sigma_tilde <- sig_theta$sigma_tilde
 
@@ -101,21 +102,13 @@ bmrvarx_da <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
                 res_cuts = res_cuts[, sim_use, ],
                 rej_accept_rate = t(rej_accept_rate))
 
-  data_for_forecasts <- list(last_y = res_y[samp_info$last_obs_num, , sim_use])
-
-  if(all_draws) {
-    lst <- list(all = all, draws = draws, data_for_forecasts = data_for_forecasts,
-                covars_used = colnames(covars))
-  } else {
-    lst <- list(draws = draws, data_for_forecasts = data_for_forecasts,
-                covars_used = colnames(covars))
-  }
-
-  if(return_y) {
-    lst[["y_draws"]] <- res_y
-  }
-
-  lst
+  ## Return final observation for future forecasts, posterior draws
+  data_for_forecasts <- list(last_y = res_y[samp_info$N_obs, , sim_use])
+  structure(list(draws = draws, data_for_forecasts = data_for_forecasts,
+                 covars_used = colnames(covars), X = covars,
+                 y = data[, c(ordinal_outcomes,
+                              setdiff(out_vars, ordinal_outcomes))]),
+            class = "bmrvarx")
 }
 
 #' Full conditional draws for the threshold parameters
@@ -189,6 +182,7 @@ bvar <- function(formula, data, sig_prior = 1000000, all_draws = FALSE,
   N_covars <- ncol(covars)
   N_base_covars <- 0
   max_iter_rej <- 0
+  N_burn_trunc <- 0
 
   ## Get sampling info, initialize, generate storage
   samp_info <- get_sampling_info(env = environment())
@@ -199,7 +193,7 @@ bvar <- function(formula, data, sig_prior = 1000000, all_draws = FALSE,
 
     ## Covariance matrix
     sig_theta <- fc_sigma_theta_tilde_bvar(y = y_use, X = covars, y_orig = y_use,
-                                           prior_precision = samp_info$prior_non_base,
+                                           prior_precision = samp_info$prior_sig,
                                            old_prior_y0 = T)
     sigma_tilde <- sig_theta$sigma_tilde
 
@@ -226,14 +220,8 @@ bvar <- function(formula, data, sig_prior = 1000000, all_draws = FALSE,
                 res_sigma = res_sigma[, sim_use],
                 res_beta = res_beta[, sim_use])
 
-
-  if(all_draws) {
-    lst <- list(all = all, draws = draws,
-                covars_used = colnames(covars))
-  } else {
-    lst <- list(draws = draws,
-                covars_used = colnames(covars))
-  }
-
-  lst
+  ## Return final observation for future forecasts, posterior draws
+  structure(list(draws = draws,
+                 covars_used = colnames(covars), X = covars, y = y_use),
+            class = "bmrvarx")
 }

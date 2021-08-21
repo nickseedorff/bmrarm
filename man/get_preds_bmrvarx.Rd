@@ -4,7 +4,13 @@
 \alias{get_preds_bmrvarx}
 \title{Full conditional draws of the latent continuous values}
 \usage{
-get_preds_bmrvarx(bmrvarx_obj, steps_ahead = 5, X, seed = 15)
+get_preds_bmrvarx(
+  bmrvarx_obj,
+  steps_ahead = 5,
+  X,
+  seed = 15,
+  get_ord_preds = T
+)
 }
 \arguments{
 \item{bmrvarx_obj}{an object returned from bmrvarx()}
