@@ -4,7 +4,7 @@
 \alias{gen_single}
 \title{Generate data for time series simulation}
 \usage{
-gen_single(N = 600, seed = 10, N_param = 3, first_obs = 101)
+gen_single(N = 610, seed = 10, N_param = 3, first_obs = 101)
 }
 \arguments{
 \item{N}{Number of timepoints}

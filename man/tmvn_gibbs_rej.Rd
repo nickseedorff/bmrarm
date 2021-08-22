@@ -14,9 +14,7 @@ tmvn_gibbs_rej(
   pre_calcs,
   max_iter,
   N_ord,
-  N_burn_trunc,
-  num_iter,
-  num_obs
+  N_burn_trunc
 )
 }
 \arguments{

@@ -126,7 +126,7 @@ fc_cuts <- function(y, z, N_cat, upper_cut_limit) {
 #' @return matrix
 #' @export
 
-fc_y <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter) {
+fc_y <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, rej_vec) {
 
   ## Current parameter values
   sig <- tmp_list$sigma
@@ -183,13 +183,15 @@ fc_y <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter) {
     }
 
     ## Store results
-    y[iter_locs, i] <- tmvn_gibbs_rej(
+    tmp <- tmvn_gibbs_rej(
       y_current = y[, i], mean = d_vec, lower = cuts_low,
       upper = cuts_high, locs = iter_locs, loc_length = iter_length,
       pre_calcs = pre_calcs, max_iter = samp_info$max_iter, N_ord = num_ord,
-      N_burn_trunc = samp_info$N_burn_trunc, num_iter = num_iter, num_obs = i)
+      N_burn_trunc = samp_info$N_burn_trunc)
+    y[iter_locs, i] <- tmp$res
+    rej_vec[i] <- tmp$rej_iter
   }
-  t(y)
+  list(y_new = t(y), rej_vec = rej_vec)
 }
 
 #' Gibbs step for truncated multivariate normal
@@ -205,17 +207,16 @@ fc_y <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter) {
 #' @importFrom MASS mvrnorm
 
 tmvn_gibbs_rej <- function(y_current, mean, lower, upper, locs, loc_length,
-                           pre_calcs, max_iter, N_ord, N_burn_trunc, num_iter,
-                           num_obs) {
+                           pre_calcs, max_iter, N_ord, N_burn_trunc) {
 
   ## If missing a single ordinal outcome then sample from truncated normal
   if(loc_length == 1) {
     res <- rtruncnorm(
       n = 1, a = lower[1], b = upper[1], sd = pre_calcs$cond_cov,
       mean = cond_mean_part(y_current, mean, pre_calcs$mean_pre, 1))
-    rej_samp_iters <<- 0
-    ## Otherwise use a naive rejection sampling approach
+    list(res = res, rej_iter = 0)
   } else {
+    ## Otherwise use a combination approach
     res <- NA
     iter <- 0
     cond_mean <- cond_mean_part(y_current, mean, pre_calcs$mean_pre, locs)
@@ -236,6 +237,6 @@ tmvn_gibbs_rej <- function(y_current, mean, lower, upper, locs, loc_length,
         upper = upper, algorithm = "gibbs", burn.in.samples = N_burn_trunc,
         start.value = start_val)
     }
+    list(res = res, rej_iter = iter)
   }
-  res
 }

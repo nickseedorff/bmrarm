@@ -5,7 +5,7 @@
 #' @importFrom MASS mvrnorm
 #' @import dplyr
 
-gen_single <- function(N = 600, seed = 10, N_param = 3, first_obs = 101) {
+gen_single <- function(N = 610, seed = 10, N_param = 3, first_obs = 101) {
   set.seed(seed)
 
   ## Additional effects

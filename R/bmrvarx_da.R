@@ -43,19 +43,19 @@ bmrvarx_da <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
   ## Get sampling info, initialize, generate storage
   samp_info <- get_sampling_info(env = environment())
   create_storage(env = environment())
-  #tmp_list$cuts[3:4, , 1] <- tmp_list$cuts[3:4,,1] + 2.5
-  #if(N_ord == 2) {
-  #  tmp_list$cuts[3:4, , 2] <- tmp_list$cuts[3:4, , 2] + 2.5
-  #}
+  rej_sampler_mat <- matrix(NA, nrow = N_obs, ncol = nsim)
+  rej_vec <- rep(NA, N_obs)
 
   ## Run simulationS
   for(i in 2:nsim) {
     mean_mat <- covars %*% tmp_list$beta
 
     ## Draw latent variables
-    y_use <- res_y[,, i] <- fc_y(
+    y_res <- fc_y(
       y = t(y_use), z = y_ord, mean_mat = t(mean_mat), tmp_list = tmp_list,
-      miss_mat = miss_mat, samp_info = samp_info, num_iter = i)
+      miss_mat = miss_mat, samp_info = samp_info, rej_vec)
+    y_use <- res_y[,, i] <- y_res$y_new
+    rej_sampler_mat[, i] <- y_res$rej_vec
 
     ## Sigma and effects
     sig_theta <- fc_sigma_theta_tilde(y = y_use, X = covars, y_orig = y_use,
@@ -99,6 +99,7 @@ bmrvarx_da <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
   data_for_forecasts <- list(last_y = res_y[samp_info$N_obs, , sim_use])
   structure(list(draws = draws, data_for_forecasts = data_for_forecasts,
                  covars_used = colnames(covars), X = covars,
+                 rej_sampler_tracker = t(rej_sampler_mat),
                  y = data[, c(ordinal_outcomes,
                               setdiff(out_vars, ordinal_outcomes))]),
             class = "bmrvarx")

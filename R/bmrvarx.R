@@ -68,15 +68,19 @@ bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
   samp_info <- get_sampling_info(env = environment())
   create_storage(env = environment())
   seqq <- seq(0, nsim, length.out = 11)
+  rej_sampler_mat <- matrix(NA, nrow = nrow(y_use), ncol = nsim)
+  rej_vec <- rep(NA, nrow(y_use))
 
   ## Run simulation
   for(i in 2:nsim) {
     mean_mat <- covars %*% tmp_list$beta
 
     ## Draw latent variables
-    y_use <- res_y[,, i] <- fc_y(
+    y_res <- fc_y(
       y = t(y_use), z = y_ord, mean_mat = t(mean_mat), tmp_list = tmp_list,
-      miss_mat = miss_mat, samp_info = samp_info, num_iter = i)
+      miss_mat = miss_mat, samp_info = samp_info, rej_vec)
+    y_use <- res_y[,, i] <- y_res$y_new
+    rej_sampler_mat[, i] <- y_res$rej_vec
 
     ## Draw expansion parameters from prior and transform data
     D_prior <- expansion_prior(cor_mat, N_ordinal = N_ord)
@@ -135,6 +139,7 @@ bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
   data_for_forecasts <- list(last_y = res_y[samp_info$N_obs, , sim_use])
   structure(list(draws = draws, data_for_forecasts = data_for_forecasts,
                  covars_used = colnames(covars), X = covars,
+                 rej_sampler_tracker = t(rej_sampler_mat),
                  y = data[, c(ordinal_outcomes,
                               setdiff(out_vars, ordinal_outcomes))]),
             class = "bmrvarx")

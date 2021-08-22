@@ -4,7 +4,7 @@
 \alias{fc_y}
 \title{Full conditional draws of the latent continuous values}
 \usage{
-fc_y(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter)
+fc_y(y, z, mean_mat, tmp_list, miss_mat, samp_info, rej_vec)
 }
 \arguments{
 \item{y}{matrix of multivariate observations}
@@ -15,8 +15,6 @@ fc_y(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter)
 
 \item{samp_info}{information for which locations to sample}
 
-\item{num_iter}{current iteration number}
-
 \item{sig}{covariance matrix for the VAR process}
 
 \item{sig0}{for the initial values}
@@ -24,6 +22,8 @@ fc_y(y, z, mean_mat, tmp_list, miss_mat, samp_info, num_iter)
 \item{M}{transition matrix for the VAR(1) component}
 
 \item{cuts}{current threshold values}
+
+\item{num_iter}{current iteration number}
 }
 \value{
 matrix
