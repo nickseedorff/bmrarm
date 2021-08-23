@@ -7,7 +7,9 @@
 get_sym_mat(cur_draws, dist_mat)
 }
 \arguments{
-\item{env}{parent environment}
+\item{cur_draws}{list of the current parameter draws}
+
+\item{dist_mat}{symmetric distance matrix with 0 down the diagonal}
 }
 \description{
 Create AR matrix

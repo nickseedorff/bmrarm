@@ -2,13 +2,15 @@
 % Please edit documentation in R/bmrarm_helper_functions.R
 \name{first_cut_prob}
 \alias{first_cut_prob}
-\title{Starting values for cut points}
+\title{Probability calculation as part of the MH-within-Gibbs step (Cowles' algorithm)}
 \usage{
 first_cut_prob(samp_info, cuts, cuts_tmp)
 }
 \arguments{
-\item{N_cats}{vector, number of categories for each ordinal variable}
+\item{samp_info}{vector of proposed current cutpoints}
+
+\item{cuts}{vector of current cutpoints}
 }
 \description{
-Starting values for cut points
+Probability calculation as part of the MH-within-Gibbs step (Cowles' algorithm)
 }

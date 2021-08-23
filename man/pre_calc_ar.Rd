@@ -2,7 +2,7 @@
 % Please edit documentation in R/bmrarm_helper_functions.R
 \name{pre_calc_ar}
 \alias{pre_calc_ar}
-\title{Extract conditional mean corresponsing to ordinal components}
+\title{Obtain conditional mean and covariance for multivariate normals}
 \usage{
 pre_calc_ar(cov_mat, locs)
 }
@@ -15,5 +15,5 @@ pre_calc_ar(cov_mat, locs)
 scalar
 }
 \description{
-Extract conditional mean corresponsing to ordinal components
+Obtain conditional mean and covariance for multivariate normals
 }

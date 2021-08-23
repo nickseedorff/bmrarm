@@ -1,6 +1,7 @@
-#' PX-DA MCMC routine to sample from HBMRVAR model
+#' Summary function for a bmrarm object
 #'
 #' @param x A bmrarm object
+#' @param digits scalar, number of decimial places to round to
 #' @export
 
 summary.bmrarm <- function(x, digits = 3) {
@@ -57,9 +58,10 @@ summary.bmrarm <- function(x, digits = 3) {
   list(beta = df_b, cov = df_s, rand_cov = df_pat, cuts = df_cut)
 }
 
-#' PX-DA MCMC routine to sample from HBMRVAR model
+#' Summary function for a bmrvarx object
 #'
-#' @param x A bmrvarx object
+#' @param x A bmrarm object
+#' @param digits scalar, number of decimial places to round to
 #' @export
 
 summary.bmrvarx <- function(x, digits = 3) {

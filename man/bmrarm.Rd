@@ -2,15 +2,15 @@
 % Please edit documentation in R/bmrarm.R
 \name{bmrarm}
 \alias{bmrarm}
-\title{PX-DA MCMC routine to sample from HBMRVAR model}
+\title{MCMC sampler to implement the bmrarm model}
 \usage{
 bmrarm(
   formula,
   data,
-  ordinal_outcome = "y_ord",
-  time_var = "time",
-  patient_var = "patient_idx",
-  random_slope = F,
+  ordinal_outcome,
+  time_var,
+  patient_var,
+  random_slope = T,
   ar_cov = TRUE,
   nsim = 1000,
   burn_in = 100,
@@ -29,29 +29,42 @@ bmrarm(
 
 \item{data}{a dataframe containing outcome variables, covariates, and a patient or subject identifier}
 
-\item{patient_var}{name of the patient or subject identifier}
+\item{ordinal_outcome}{a character string, which contains the variable name for the ordinal outcome}
+
+\item{time_var}{a character string, which contains the variable name for time indexing;
+this must be integer valued and should indicate the observation number.}
+
+\item{patient_var}{a character string, which contains the variable name for patient indexing}
+
+\item{ar_cov}{logical, indicating use of an autoregressive error term. The default is TRUE}
 
 \item{nsim}{positive integer, number of iterations with default of 1000}
 
-\item{burn_in}{positive integer, number of iterations to remove with default of 100. Must be >= 100.}
+\item{burn_in}{positive integer, number of iterations to remove with default of 100}
 
-\item{thin}{positive integer, specifiers the period of saving samples. Default of 20 due to the high autocorrelation of the cutpoints}
+\item{thin}{positive integer, specifies the period of saving samples. Default of 10}
 
 \item{seed}{positive integer, seed for random number generation}
 
-\item{sig_prior}{prior variance on the regression coefficients}
+\item{sig_prior}{scalar, variance term for prior on the beta coefficients}
 
-\item{ordinal_outcomes}{a character string containing the names of the ordinal outcomes}
+\item{sd_vec}{numeric vector, containing standard deviations for Metroplis Hastings proposals, either of length 4 or 6.
+The values are associated with the MH-within-gibbs step, the ar term, and the random effects}
 
-\item{all_draws}{logical with a default of FALSE which discards burn-in}
+\item{N_burn_trunc}{integer, number of burn-in draws from the truncated multivariate normal Gibbs sampler}
 
-\item{verbose}{logical, print iteration number to keep track of progress}
+\item{prior_siw_uni}{prior bounds for the uniform distribution associated with the SIW prior}
 
-\item{max_iter_rej}{maximum number of rejection algorithm attempts for multivariate truncated normal}
+\item{prior_siw_df}{degrees of freedom for the SIW prior.
+The default is 1 + number of random effects for a single person (2 or 4).}
+
+\item{prior_siw_scale_mat}{scale matrix for the SIW prior. The default is an identity matrix}
+
+\item{random_Slope}{logical, indicating use of random slopes. The default is TRUE}
 }
 \value{
-mcmc
+bmrarm
 }
 \description{
-PX-DA MCMC routine to sample from HBMRVAR model
+MCMC sampler to implement the bmrarm model
 }

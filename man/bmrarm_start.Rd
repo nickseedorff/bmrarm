@@ -2,7 +2,7 @@
 % Please edit documentation in R/bmrarm_helper_functions.R
 \name{bmrarm_start}
 \alias{bmrarm_start}
-\title{Create AR matrix}
+\title{Create lists, vectors, and matrices for storage and passing to functions}
 \usage{
 bmrarm_start(env)
 }
@@ -10,5 +10,5 @@ bmrarm_start(env)
 \item{env}{parent environment}
 }
 \description{
-Create AR matrix
+Create lists, vectors, and matrices for storage and passing to functions
 }

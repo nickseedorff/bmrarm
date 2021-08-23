@@ -1,27 +1,32 @@
-#' PX-DA MCMC routine to sample from HBMRVAR model
+#' MCMC sampler to implement the bmrarm model
 #'
 #' @param formula an object of class "formula"; a symbolic description of the model to be fitted
 #' @param data a dataframe containing outcome variables, covariates, and a patient or subject identifier
-#' @param ordinal_outcomes a character string containing the names of the ordinal outcomes
-#' @param patient_var name of the patient or subject identifier
-#' @param sig_prior prior variance on the regression coefficients
-#' @param all_draws logical with a default of FALSE which discards burn-in
+#' @param ordinal_outcome a character string, which contains the variable name for the ordinal outcome
+#' @param time_var a character string, which contains the variable name for time indexing;
+#' this must be integer valued and should indicate the observation number.
+#' @param patient_var a character string, which contains the variable name for patient indexing
+#' @param random_Slope logical, indicating use of random slopes. The default is TRUE
+#' @param ar_cov logical, indicating use of an autoregressive error term. The default is TRUE
 #' @param nsim positive integer, number of iterations with default of 1000
-#' @param burn_in positive integer, number of iterations to remove with default of 100. Must be >= 100.
-#' @param thin positive integer, specifiers the period of saving samples. Default of 20 due to the high autocorrelation of the cutpoints
+#' @param burn_in positive integer, number of iterations to remove with default of 100
+#' @param thin positive integer, specifies the period of saving samples. Default of 10
 #' @param seed positive integer, seed for random number generation
-#' @param verbose logical, print iteration number to keep track of progress
-#' @param max_iter_rej maximum number of rejection algorithm attempts for multivariate truncated normal
-#' @return mcmc
+#' @param sig_prior scalar, variance term for prior on the beta coefficients
+#' @param sd_vec numeric vector, containing standard deviations for Metroplis Hastings proposals, either of length 4 or 6.
+#' The values are associated with the MH-within-gibbs step, the ar term, and the random effects
+#' @param N_burn_trunc integer, number of burn-in draws from the truncated multivariate normal Gibbs sampler
+#' @param prior_siw_uni prior bounds for the uniform distribution associated with the SIW prior
+#' @param prior_siw_df degrees of freedom for the SIW prior.
+#' The default is 1 + number of random effects for a single person (2 or 4).
+#' @param prior_siw_scale_mat scale matrix for the SIW prior. The default is an identity matrix
+#' @return bmrarm
 #' @importFrom zoo na.approx
-#' @importFrom fastDummies dummy_cols
-#' @importFrom magic adiag
 #' @export
 
-bmrarm <- function(formula, data, ordinal_outcome = "y_ord",
-                   time_var = "time", patient_var = "patient_idx",
-                   random_slope = F, ar_cov = TRUE, nsim = 1000,
-                   burn_in = 100, thin = 10, seed = 14,
+bmrarm <- function(formula, data, ordinal_outcome,
+                   time_var, patient_var, random_slope = T, ar_cov = TRUE,
+                   nsim = 1000, burn_in = 100, thin = 10, seed = 14,
                    sig_prior = 1000000, sd_vec = c(0.15, 0.30, rep(0.2, 4)),
                    N_burn_trunc = 10, prior_siw_uni = c(0.2, 5),
                    prior_siw_df = NULL, prior_siw_scale_mat = NULL) {
@@ -45,6 +50,14 @@ bmrarm <- function(formula, data, ordinal_outcome = "y_ord",
 
   if(length(cont_out_var) != 1) {
     stop("brmarm must be supplied one continous outcome")
+  }
+
+  if(random_slope & length(sd_vec) != 6) {
+    stop("Length of sd_vec must = 6, for the 6 metropolis hastings proposals")
+  }
+
+  if(!random_slope & length(sd_vec) != 4) {
+    stop("Length of sd_vec must = 4, for the 4 metropolis hastings proposals")
   }
 
   ## Ensure ordinal outcome is based on equally spaced integers
@@ -105,7 +118,7 @@ bmrarm <- function(formula, data, ordinal_outcome = "y_ord",
     res_ar[i] <- cur_draws$ar
 
     ## Subject specific effects
-    vals <- bmrarm_fc_patient_siw(y, z, X, cur_draws, samp_info, 1, Z_kron,
+    vals <- bmrarm_fc_patient_siw(y, z, X, cur_draws, samp_info, Z_kron,
                                   prior_siw_uni, prior_siw_df,
                                   prior_siw_scale_mat)
     res_pat_sig[, i] <- cur_draws$pat_sig <- vals$pat_sig

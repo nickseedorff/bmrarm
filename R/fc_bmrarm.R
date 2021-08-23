@@ -1,19 +1,15 @@
-#' Full conditional draws of the latent continuous values
+#' Function to sample the latent continuous values and cutpoints
 #'
-#' @param y matrix of multivariate observations
-#' @param z matrix of ordinal voutcomes
-#' @param sig covariance matrix for the VAR process
-#' @param sig0 for the initial values
-#' @param M transition matrix for the VAR(1) component
-#' @param cuts current threshold values
-#' @param miss_mat locations of missing values
-#' @param samp_info information for which locations to sample
-#' @param num_iter current iteration number
+#' @param y matrix of latent and observed continuous observations
+#' @param z vector of the ordinal outcomes
+#' @param X design matrix
+#' @param Z_kron design matrix for random effects
+#' @param cur_draws list of current parameter values
+#' @param samp_info list of internal info used for sampling
 #' @import tmvtnorm
 #' @importFrom truncnorm rtruncnorm
 #' @importFrom OpenMx omxMnor
-#' @return matrix
-#' @export
+#' @return list
 
 bmrarm_fc_y_cuts <- function(y, z, X, Z_kron, cur_draws, samp_info) {
 
@@ -134,19 +130,18 @@ bmrarm_fc_y_cuts <- function(y, z, X, Z_kron, cur_draws, samp_info) {
   list(y = y, cuts = cuts_tmp, accept = 1)
 }
 
-#' Full conditional draws of the latent continuous values
+#' Function to sample the latent continuous values
 #'
-#' @param y matrix of multivariate observations
-#' @param z matrix of ordinal voutcomes
-#' @param sig covariance matrix for the VAR process
-#' @param sig0 for the initial values
-#' @param M transition matrix for the VAR(1) component
-#' @param cuts current threshold values
-#' @param miss_mat locations of missing values
-#' @param samp_info information for which locations to sample
-#' @param num_iter current iteration number
-#' @return matrix
-#' @export
+#' @param y matrix of latent and observed continuous observations
+#' @param z vector of the ordinal outcomes
+#' @param X design matrix
+#' @param Z_kron design matrix for random effects
+#' @param cur_draws list of current parameter values
+#' @param samp_info list of internal info used for sampling
+#' @import tmvtnorm
+#' @importFrom truncnorm rtruncnorm
+#' @importFrom OpenMx omxMnor
+#' @return list
 
 bmrarm_fc_missing <- function(y, z, X, Z_kron, cur_draws, samp_info) {
 
@@ -190,14 +185,15 @@ bmrarm_fc_missing <- function(y, z, X, Z_kron, cur_draws, samp_info) {
   matrix(y_vec, ncol = samp_info$N_outcomes)
 }
 
-#' Full conditional draws of the regression coefficients
+#' Function to sample regression coefficients and covariance matrix
 #'
-#' @param subject_effects matrix of patient specific intercepts
-#' @param sigma residual covariance matrix
-#' @param prior_alpha prior term for shape
-#' @param prior_alpha prior term for scale
+#' @param y matrix of latent and observed continuous observations
+#' @param X design matrix
+#' @param Z_kron design matrix for random effects
+#' @param cur_draws list of current parameter values
+#' @param samp_info list of internal info used for sampling
 #' @importFrom LaplacesDemon rinvwishart rmatrixnorm
-#' @export
+#' @return list
 
 bmrarm_fc_sig_beta <- function(y, X, Z_kron, cur_draws, samp_info) {
 
@@ -251,14 +247,14 @@ bmrarm_fc_sig_beta <- function(y, X, Z_kron, cur_draws, samp_info) {
   list(beta = beta, sig = sig)
 }
 
-#' Full conditional draws of the regression coefficients
+#' Function to sample the autoregressive parameter
 #'
-#' @param subject_effects matrix of patient specific intercepts
-#' @param sigma residual covariance matrix
-#' @param prior_alpha prior term for shape
-#' @param prior_alpha prior term for scale
+#' @param y matrix of latent and observed continuous observations
+#' @param X design matrix
+#' @param Z_kron design matrix for random effects
+#' @param cur_draws list of current parameter values
+#' @param samp_info list of internal info used for sampling
 #' @return scalar
-#' @export
 
 bmrarm_mh_ar <- function(y, X, Z_kron, cur_draws, samp_info) {
   ## Mean vector needed for all covariance terms
@@ -288,14 +284,13 @@ bmrarm_mh_ar <- function(y, X, Z_kron, cur_draws, samp_info) {
   }
 }
 
-#' Full conditional draws of the regression coefficients
+#' Function to calculate values for bmrarm_mh_ar accept reject step
 #'
-#' @param subject_effects matrix of patient specific intercepts
-#' @param sigma residual covariance matrix
-#' @param prior_alpha prior term for shape
-#' @param prior_alpha prior term for scale
+#' @param resid_mat matrix of residuals
+#' @param cur_draws list of current parameter values
+#' @param samp_info list of internal info used for sampling
+#' @param samp_info list of covariance matrices and determinants
 #' @return scalar
-#' @export
 
 dmatrix_normal_log <- function(resid_mat, cur_draws, samp_info, sig_list) {
   N_pat <- samp_info$N_pat
@@ -317,23 +312,21 @@ dmatrix_normal_log <- function(resid_mat, cur_draws, samp_info, sig_list) {
   sum(pat_vals)
 }
 
-#' Full conditional draws of the latent continuous values
-#'
-#' @param y matrix of multivariate observations
-#' @param z matrix of ordinal voutcomes
-#' @param sig covariance matrix for the VAR process
-#' @param sig0 for the initial values
-#' @param M transition matrix for the VAR(1) component
-#' @param cuts current threshold values
-#' @param miss_mat locations of missing values
-#' @param samp_info information for which locations to sample
-#' @param num_iter current iteration number
-#' @import tmvtnorm
-#' @return matrix
-#' @export
+#' Function to sample the random effects and the associated covariance matrix
+#' @param y matrix of latent and observed continuous observations
+#' @param z vector of the ordinal outcomes
+#' @param X design matrix
+#' @param cur_draws list of current parameter values
+#' @param samp_info list of internal info used for sampling
+#' @param Z_kron design matrix for random effects
+#' @param prior_siw_uni prior bounds for the uniform distribution associated with the SIW prior
+#' @param prior_siw_df degrees of freedom for the SIW prior
+#' @param prior_siw_scale_mat scale matrix for the SIW prior
+#' @importFrom truncnorm rtruncnorm dtruncnorm
+#' @return list
 
-bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list,
-                                  Z_kron, prior_siw_uni, prior_siw_df,
+bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, Z_kron,
+                                  prior_siw_uni, prior_siw_df,
                                   prior_siw_scale_mat) {
 
   ## Generate full sigma matrix
@@ -407,14 +400,12 @@ bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, prior_list,
     comp_new <- dmatrix_normal_log(resid_mat_new, cur_draws2, samp_info,
                                    sig_list)
     compar_val <- comp_new - comp_old +
-      log(truncnorm::dtruncnorm(cur_draws$pat_sig_sd[i], prior_siw_uni[1],
-                                prior_siw_uni[2],
-                                mean = cur_draws2$pat_sig_sd[i],
-                                sd = samp_info$sd_pat_sd[i])) -
-      log(truncnorm::dtruncnorm(cur_draws2$pat_sig_sd[i], prior_siw_uni[1],
-                                prior_siw_uni[2],
-                                mean = cur_draws$pat_sig_sd[i],
-                                sd = samp_info$sd_pat_sd[i]))
+      log(dtruncnorm(cur_draws$pat_sig_sd[i], prior_siw_uni[1],
+                     prior_siw_uni[2], mean = cur_draws2$pat_sig_sd[i],
+                     sd = samp_info$sd_pat_sd[i])) -
+      log(dtruncnorm(cur_draws2$pat_sig_sd[i], prior_siw_uni[1],
+                     prior_siw_uni[2], mean = cur_draws$pat_sig_sd[i],
+                     sd = samp_info$sd_pat_sd[i]))
 
     if(compar_val >= log(runif(1)) & cur_draws2$pat_sig_sd[i] >= -Inf &
        cur_draws2$pat_sig_sd[i] <= Inf) {

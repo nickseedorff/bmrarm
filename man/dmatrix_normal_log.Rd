@@ -2,20 +2,20 @@
 % Please edit documentation in R/fc_bmrarm.R
 \name{dmatrix_normal_log}
 \alias{dmatrix_normal_log}
-\title{Full conditional draws of the regression coefficients}
+\title{Function to calculate values for bmrarm_mh_ar accept reject step}
 \usage{
 dmatrix_normal_log(resid_mat, cur_draws, samp_info, sig_list)
 }
 \arguments{
-\item{subject_effects}{matrix of patient specific intercepts}
+\item{resid_mat}{matrix of residuals}
 
-\item{sigma}{residual covariance matrix}
+\item{cur_draws}{list of current parameter values}
 
-\item{prior_alpha}{prior term for scale}
+\item{samp_info}{list of covariance matrices and determinants}
 }
 \value{
 scalar
 }
 \description{
-Full conditional draws of the regression coefficients
+Function to calculate values for bmrarm_mh_ar accept reject step
 }

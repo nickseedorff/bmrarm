@@ -2,32 +2,26 @@
 % Please edit documentation in R/fc_bmrarm.R
 \name{bmrarm_fc_y_cuts}
 \alias{bmrarm_fc_y_cuts}
-\title{Full conditional draws of the latent continuous values}
+\title{Function to sample the latent continuous values and cutpoints}
 \usage{
 bmrarm_fc_y_cuts(y, z, X, Z_kron, cur_draws, samp_info)
 }
 \arguments{
-\item{y}{matrix of multivariate observations}
+\item{y}{matrix of latent and observed continuous observations}
 
-\item{z}{matrix of ordinal voutcomes}
+\item{z}{vector of the ordinal outcomes}
 
-\item{samp_info}{information for which locations to sample}
+\item{X}{design matrix}
 
-\item{sig}{covariance matrix for the VAR process}
+\item{Z_kron}{design matrix for random effects}
 
-\item{sig0}{for the initial values}
+\item{cur_draws}{list of current parameter values}
 
-\item{M}{transition matrix for the VAR(1) component}
-
-\item{cuts}{current threshold values}
-
-\item{miss_mat}{locations of missing values}
-
-\item{num_iter}{current iteration number}
+\item{samp_info}{list of internal info used for sampling}
 }
 \value{
-matrix
+list
 }
 \description{
-Full conditional draws of the latent continuous values
+Function to sample the latent continuous values and cutpoints
 }

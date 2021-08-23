@@ -1,4 +1,4 @@
-#' Extract conditional mean corresponsing to ordinal components
+#' Obtain conditional mean and covariance for multivariate normals
 #'
 #' @param cov_mat covariance matrix based on first, last, or middle obs
 #' @param locs vector of locations to be sampled
@@ -20,9 +20,10 @@ pre_calc_ar <- function(cov_mat, locs) {
   list(mean_pre = mean_pre, cond_cov = cond_cov, marg_cov = marg_cov)
 }
 
-#' Create list of covariance matrices and optionally their inverse
+#' Create list of covariance matrices
 #'
-#' @param env parent environment
+#' @param cur_draws cur_draws list of current parameter values
+#' @param samp_info list of internal info used for sampling
 
 get_sig_list <- function(cur_draws, samp_info) {
   chol_list <- marg_cov_list <- sig_list <- sig_inv_list <-
@@ -54,9 +55,10 @@ get_sig_list <- function(cur_draws, samp_info) {
        marg_cov_list = marg_cov_list)
 }
 
-#' Create list of covariance matrices and optionally their inverse
+#' Create list of covariance matrices, only used in posterior summaries
 #'
-#' @param env parent environment
+#' @param cur_draws cur_draws list of current parameter values
+#' @param samp_info list of internal info used for sampling
 
 get_sig_list_marg <- function(cur_draws, samp_info) {
   chol_list <- marg_cov_list <- sig_list <-
@@ -90,7 +92,7 @@ get_sig_list_marg <- function(cur_draws, samp_info) {
        marg_cov_list = marg_cov_list)
 }
 
-#' Create AR matrix
+#' Create lists, vectors, and matrices for storage and passing to functions
 #'
 #' @param env parent environment
 
@@ -237,10 +239,10 @@ bmrarm_start <- function(env) {
 
 #' Create AR matrix
 #'
-#' @param env parent environment
+#' @param cur_draws list of the current parameter draws
+#' @param dist_mat symmetric distance matrix with 0 down the diagonal
 
 get_sym_mat <- function(cur_draws, dist_mat) {
-  #P1 <- exp(-rho * as.matrix(dist(times, diag = T, upper = T)))
   sigma <- cur_draws$sigma
   P1 <- cur_draws$ar ^ dist_mat
   kronecker(cur_draws$sigma, cur_draws$ar ^ dist_mat)
@@ -249,6 +251,7 @@ get_sym_mat <- function(cur_draws, dist_mat) {
 #' Starting values for cut points
 #'
 #' @param N_cats vector, number of categories for each ordinal variable
+#' @param fixed number of fixed cutpoints, excluding the min and max which are infinite
 
 start_cuts <- function(N_cats, fixed = 1) {
   starts <- matrix(NA, nrow = max(N_cats) + 1, ncol = length(N_cats))
@@ -269,9 +272,11 @@ start_cuts <- function(N_cats, fixed = 1) {
   starts
 }
 
-#' Starting values for cut points
+#' Probability calculation as part of the MH-within-Gibbs step (Cowles' algorithm)
 #'
-#' @param N_cats vector, number of categories for each ordinal variable
+#' @param samp_info list of internal info used for sampling
+#' @param cuts vector of current cutpoints
+#' @param samp_info vector of proposed current cutpoints
 
 first_cut_prob <- function(samp_info, cuts, cuts_tmp) {
   first_prob <- 1

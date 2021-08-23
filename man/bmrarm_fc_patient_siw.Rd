@@ -2,7 +2,7 @@
 % Please edit documentation in R/fc_bmrarm.R
 \name{bmrarm_fc_patient_siw}
 \alias{bmrarm_fc_patient_siw}
-\title{Full conditional draws of the latent continuous values}
+\title{Function to sample the random effects and the associated covariance matrix}
 \usage{
 bmrarm_fc_patient_siw(
   y,
@@ -10,7 +10,6 @@ bmrarm_fc_patient_siw(
   X,
   cur_draws,
   samp_info,
-  prior_list,
   Z_kron,
   prior_siw_uni,
   prior_siw_df,
@@ -18,27 +17,27 @@ bmrarm_fc_patient_siw(
 )
 }
 \arguments{
-\item{y}{matrix of multivariate observations}
+\item{y}{matrix of latent and observed continuous observations}
 
-\item{z}{matrix of ordinal voutcomes}
+\item{z}{vector of the ordinal outcomes}
 
-\item{samp_info}{information for which locations to sample}
+\item{X}{design matrix}
 
-\item{sig}{covariance matrix for the VAR process}
+\item{cur_draws}{list of current parameter values}
 
-\item{sig0}{for the initial values}
+\item{samp_info}{list of internal info used for sampling}
 
-\item{M}{transition matrix for the VAR(1) component}
+\item{Z_kron}{design matrix for random effects}
 
-\item{cuts}{current threshold values}
+\item{prior_siw_uni}{prior bounds for the uniform distribution associated with the SIW prior}
 
-\item{miss_mat}{locations of missing values}
+\item{prior_siw_df}{degrees of freedom for the SIW prior}
 
-\item{num_iter}{current iteration number}
+\item{prior_siw_scale_mat}{scale matrix for the SIW prior}
 }
 \value{
-matrix
+list
 }
 \description{
-Full conditional draws of the latent continuous values
+Function to sample the random effects and the associated covariance matrix
 }

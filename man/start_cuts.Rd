@@ -11,6 +11,8 @@ start_cuts(N_cats, fixed = 1)
 }
 \arguments{
 \item{N_cats}{vector, number of categories for each ordinal variable}
+
+\item{fixed}{number of fixed cutpoints, excluding the min and max which are infinite}
 }
 \description{
 Starting values for cut points

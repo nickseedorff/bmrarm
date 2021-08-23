@@ -2,17 +2,24 @@
 % Please edit documentation in R/fc_bmrarm.R
 \name{bmrarm_fc_sig_beta}
 \alias{bmrarm_fc_sig_beta}
-\title{Full conditional draws of the regression coefficients}
+\title{Function to sample regression coefficients and covariance matrix}
 \usage{
 bmrarm_fc_sig_beta(y, X, Z_kron, cur_draws, samp_info)
 }
 \arguments{
-\item{subject_effects}{matrix of patient specific intercepts}
+\item{y}{matrix of latent and observed continuous observations}
 
-\item{sigma}{residual covariance matrix}
+\item{X}{design matrix}
 
-\item{prior_alpha}{prior term for scale}
+\item{Z_kron}{design matrix for random effects}
+
+\item{cur_draws}{list of current parameter values}
+
+\item{samp_info}{list of internal info used for sampling}
+}
+\value{
+list
 }
 \description{
-Full conditional draws of the regression coefficients
+Function to sample regression coefficients and covariance matrix
 }
