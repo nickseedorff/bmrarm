@@ -1,9 +1,7 @@
-#' Get DIC
+#' Get marginal or conditional DIC for a bmrarm object
 #'
-#' @param y_current current continous outcome values
-#' @param mean_vec vector of mean values
-#' @param pre_calc_mat a pre-calculated matrix
-#' @param ord_loc number of ordinal outcomes
+#' @param samps a bmrarm object
+#' @param marginal logical, used marginal (the default) or conditional DIC
 #' @return vector
 #' @export
 
@@ -80,13 +78,23 @@ get_DIC <- function(samps, marginal = TRUE) {
   c(DIC = pd + mean_dev, D = mean_dev, pd = pd, dev_of_means = dev_of_means)
 }
 
-#' Get DIC
+#' Get deviance for a single set of parameter values, used to calculate DIC
 #'
-#' @param y_current current continous outcome values
-#' @param mean_vec vector of mean values
-#' @param pre_calc_mat a pre-calculated matrix
-#' @param ord_loc number of ordinal outcomes
+#' @param y matrix of latent and observed continuous observations
+#' @param z vector of the ordinal outcomes
+#' @param X design matrix
+#' @param Z_kron design matrix for random effects
+#' @param pat_idx vector to index patients
+#' @param pat_idx vector to index patients for both outcomes
+#' @param beta matrix of beta values
+#' @param sig_list list of covariance matrix values
+#' @param cuts vector of cutpoints
+#' @param pat_eff matrix of patient effects
+#' @param miss_mat matrix to identify locations of missing values
+#' @param samp_info list of interal info used for sampling
+#' @param marginal logical, indicates of mDIC of cDIC is to be calculated
 #' @importFrom mvtnorm dmvnorm
+#' @importFrom OpenMx omxMnor
 #' @return scalar
 
 get_dev <- function(y, X, z, Z_kron, pat_idx, pat_idx_long, beta, sig_list,
@@ -143,9 +151,5 @@ get_dev <- function(y, X, z, Z_kron, pat_idx, pat_idx_long, beta, sig_list,
 
   ## Calculate deviance
   dev_val <- -2 * (sum(probs) + sum(cont_vals))
-  dev_ord <- -2 * sum(probs)
-  dev_cont <- -2 * sum(cont_vals)
-  dev_val = dev_val
-  list(dev_val = dev_val, dev_ord = dev_ord, dev_cont = dev_cont)
   dev_val
 }

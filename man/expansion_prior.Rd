@@ -2,7 +2,7 @@
 % Please edit documentation in R/fc_bmrvarx.R
 \name{expansion_prior}
 \alias{expansion_prior}
-\title{Full conditional draws of the latent continuous values}
+\title{Prior for the expansion parameters}
 \usage{
 expansion_prior(cor_mat, N_ordinal)
 }
@@ -15,5 +15,5 @@ expansion_prior(cor_mat, N_ordinal)
 matrix
 }
 \description{
-Full conditional draws of the latent continuous values
+Prior for the expansion parameters
 }

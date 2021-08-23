@@ -2,7 +2,7 @@
 % Please edit documentation in R/bmrvarx_da.R
 \name{bmrvarx_da}
 \alias{bmrvarx_da}
-\title{PA MCMC routine to sample from BMRVAR model}
+\title{Gibbs DA sampler to implement a bmrvarx model}
 \usage{
 bmrvarx_da(
   formula,
@@ -13,25 +13,34 @@ bmrvarx_da(
   burn_in = 100,
   thin = 10,
   seed = 14,
-  max_iter_rej = 500
+  max_iter_rej = 500,
+  N_burn_trunc = 10
 )
 }
 \arguments{
-\item{nsim}{scalar, number of iterations with default of 1000}
+\item{formula}{an object of class "formula"; a symbolic description of the model to be fitted}
 
-\item{burn_in}{scalar, number of iterations to remove with default of 50}
+\item{data}{a dataframe containing outcome variables, covariates, and a patient or subject identifier}
 
-\item{seed}{seed to default, default of 14}
+\item{ordinal_outcomes}{a character string containing the names of the ordinal outcomes}
 
-\item{y}{matrix of multivariate observations}
+\item{sig_prior}{scalar, prior variance on the regression coefficients}
 
-\item{z}{vector of disease status}
+\item{nsim}{positive integer, number of iterations with default of 1000}
 
-\item{df}{dataframe with patient and time point indexes}
+\item{burn_in}{positive integer, number of iterations to remove with default of 100}
+
+\item{thin}{positive integer, specifiers the period of saving samples. Default of 10}
+
+\item{seed}{positive integer, seed for random number generation}
+
+\item{max_iter_rej}{maximum number of rejection algorithm attempts for multivariate truncated normal}
+
+\item{N_burn_trunc}{integer, number of burn-in draws from the truncated multivariate normal Gibbs sampler}
 }
 \value{
-mcmc
+bmrvarx
 }
 \description{
-PA MCMC routine to sample from BMRVAR model
+Gibbs DA sampler to implement a bmrvarx model
 }

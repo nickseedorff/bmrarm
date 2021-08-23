@@ -2,13 +2,15 @@
 % Please edit documentation in R/summary.R
 \name{summary.bmrarm}
 \alias{summary.bmrarm}
-\title{PX-DA MCMC routine to sample from HBMRVAR model}
+\title{Summary function for a bmrarm object}
 \usage{
 \method{summary}{bmrarm}(x, digits = 3)
 }
 \arguments{
 \item{x}{A bmrarm object}
+
+\item{digits}{scalar, number of decimial places to round to}
 }
 \description{
-PX-DA MCMC routine to sample from HBMRVAR model
+Summary function for a bmrarm object
 }

@@ -2,13 +2,13 @@
 % Please edit documentation in R/bmrvarx_helper_functions.R
 \name{get_sampling_info}
 \alias{get_sampling_info}
-\title{Starting values for cut points}
+\title{Create list of sampling info to pass to functions}
 \usage{
 get_sampling_info(env)
 }
 \arguments{
-\item{N_cats}{vector, number of categories for each ordinal variable}
+\item{env}{parent environment}
 }
 \description{
-Starting values for cut points
+Create list of sampling info to pass to functions
 }

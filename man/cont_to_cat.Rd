@@ -2,13 +2,15 @@
 % Please edit documentation in R/get_preds.R
 \name{cont_to_cat}
 \alias{cont_to_cat}
-\title{Get cuts list}
+\title{Discretize a latent value using cutpoints}
 \usage{
 cont_to_cat(y, cut_points)
 }
 \arguments{
-\item{y}{continuous value to be discretized}
+\item{y}{scalar continuous value}
+
+\item{cut_points}{vector of cutpoints}
 }
 \description{
-Get cuts list
+Discretize a latent value using cutpoints
 }

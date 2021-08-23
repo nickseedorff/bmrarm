@@ -2,22 +2,18 @@
 % Please edit documentation in R/get_preds.R
 \name{get_pred}
 \alias{get_pred}
-\title{Get DIC}
+\title{Generate posterior predictive draws for bmrarm object. Not intended for public use.}
 \usage{
 get_pred(samps, new_X = NULL)
 }
 \arguments{
-\item{y_current}{current continous outcome values}
+\item{samps}{bmrarm object with additional structure for new time points}
 
-\item{mean_vec}{vector of mean values}
-
-\item{pre_calc_mat}{a pre-calculated matrix}
-
-\item{ord_loc}{number of ordinal outcomes}
+\item{new_X}{new design matrix}
 }
 \value{
-scalar
+list
 }
 \description{
-Get DIC
+Generate posterior predictive draws for bmrarm object. Not intended for public use.
 }

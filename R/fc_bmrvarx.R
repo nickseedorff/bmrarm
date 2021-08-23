@@ -1,9 +1,9 @@
-#' Full conditional draws of the latent continuous values
+#' Prior for the expansion parameters
 #'
 #' @param cor_mat correlation matrix from previous draw
 #' @param N_ordinal number of ordinal outcomes
-#' @return matrix
 #' @importFrom LaplacesDemon rinvgamma
+#' @return matrix
 
 expansion_prior <- function(cor_mat, N_ordinal) {
   N_total <- ncol(cor_mat)
@@ -20,15 +20,15 @@ expansion_prior <- function(cor_mat, N_ordinal) {
   diag(c(expansions, rep(1, N_cont)))
 }
 
-#' Full conditional draws of the regression coefficients
+#' Function to draw regression coefficients and covariance matrix
 #'
-#' @param y matrix of multivariate observations
+#' @param y matrix of multivariate continuous observations
 #' @param X design matrix
 #' @param prior_precision prior precision matrix
-#' @return matrix
+#' @param y_orig unscaled version of y
 #' @importFrom LaplacesDemon rinvwishart rmatrixnorm
 #' @import dplyr
-#' @export
+#' @return list
 
 fc_sigma_theta_tilde <- function(y, X, prior_precision, y_orig) {
   N_outcome <- ncol(y)
@@ -49,47 +49,13 @@ fc_sigma_theta_tilde <- function(y, X, prior_precision, y_orig) {
   list(sigma_tilde = sig_draw, theta_tilde = theta)
 }
 
-#' Full conditional draws of the regression coefficients
-#'
-#' @param y matrix of multivariate observations
-#' @param X design matrix
-#' @param prior_precision prior precision matrix
-#' @return matrix
-#' @importFrom LaplacesDemon rinvwishart rmatrixnorm
-#' @import dplyr
-
-fc_sigma_theta_tilde_bvar <- function(y, X, prior_precision, y_orig, old_prior_y0) {
-  N_outcome <- ncol(y)
-  w_tmp <- y
-  X_tilde <- cbind(X, rbind(rep(0, N_outcome), y_orig[-nrow(y), ]))
-
-  if(old_prior_y0) {
-    w_tmp <- y[-1, ]
-    X_tilde <- cbind(X, rbind(rep(0, N_outcome), y_orig[-nrow(y), ]))[-1, ]
-  }
-
-
-  ## Find theta hat
-  x_inv <- chol2inv(chol(prior_precision + crossprod(X_tilde)))
-  theta_hat <- x_inv %*% t(X_tilde) %*% w_tmp
-
-  ## sigma_draw draw
-  val <- crossprod(w_tmp) + diag(rep(1, N_outcome)) -
-    t(w_tmp) %*% X_tilde %*% theta_hat
-  sig_draw <- rinvwishart(nrow(w_tmp) + N_outcome + 1, val)
-
-  ## effects_draw
-  theta <- rmatrixnorm(M = theta_hat, V = sig_draw, U = x_inv)
-  list(sigma_tilde = sig_draw, theta_tilde = theta)
-}
-
-#' Full conditional draws for the threshold parameters
+#' Function to draw cutpoint parameters
 #'
 #' @param y matrix of multivariate observations
 #' @param z matrix of ordinal outcomes
 #' @param N_cat vector of positive integers, number of categories for each ordinal outcome
+#' @param upper_cut_limit maximum value for the cutpoint priors (delta)
 #' @return list
-#' @export
 
 fc_cuts <- function(y, z, N_cat, upper_cut_limit) {
   cuts_list <- list()
@@ -112,19 +78,15 @@ fc_cuts <- function(y, z, N_cat, upper_cut_limit) {
   cuts_list
 }
 
-#' Full conditional draws of the latent continuous values
+#' Function to draw latent continuous values
 #'
-#' @param y matrix of multivariate observations
-#' @param z matrix of ordinal voutcomes
-#' @param sig covariance matrix for the VAR process
-#' @param sig0 for the initial values
-#' @param M transition matrix for the VAR(1) component
-#' @param cuts current threshold values
-#' @param miss_mat locations of missing values
-#' @param samp_info information for which locations to sample
-#' @param num_iter current iteration number
-#' @return matrix
-#' @export
+#' @param y matrix of continuous observations
+#' @param z matrix of ordinal outcomes
+#' @param tmp_list list of current parameter values
+#' @param miss_mat matrix of location of missing values
+#' @param samp_info list of internal information used for sampling
+#' @param rej_vec vector, values track the attempts by the rejection sampler
+#' @return list
 
 fc_y <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, rej_vec) {
 
@@ -186,7 +148,7 @@ fc_y <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, rej_vec) {
     tmp <- tmvn_gibbs_rej(
       y_current = y[, i], mean = d_vec, lower = cuts_low,
       upper = cuts_high, locs = iter_locs, loc_length = iter_length,
-      pre_calcs = pre_calcs, max_iter = samp_info$max_iter, N_ord = num_ord,
+      pre_calcs = pre_calcs, max_iter = samp_info$max_iter,
       N_burn_trunc = samp_info$N_burn_trunc)
     y[iter_locs, i] <- tmp$res
     rej_vec[i] <- tmp$rej_iter
@@ -195,19 +157,20 @@ fc_y <- function(y, z, mean_mat, tmp_list, miss_mat, samp_info, rej_vec) {
 }
 
 #' Gibbs step for truncated multivariate normal
-#' @param y_current continous outcome values
+#' @param y_current continuous outcome values
 #' @param mean mean vector of multivariate normal
-#' @param sigma covariance matrix
-#' @param lower vector of lower thresholds
-#' @param upper vector of upper thresholds
-#' @param locs locations to sample
-#' @param pre_cals pre calculations, including the conditional variance
-#' @return vector
+#' @param lower scalar, lower truncation bound
+#' @param upper scalar, upper truncation bound
+#' @param locs vector of locations to sample
+#' @param loc_length length of locs
+#' @param pre_calcs list of conditional means and covariance matrices
+#' @param max_iter integer, maximum number of rejection sampler attempts
+#' @param N_burn_trunc integer, number of Gibbs burn-in iterations
 #' @importFrom truncnorm rtruncnorm
-#' @importFrom MASS mvrnorm
+#' @return list
 
 tmvn_gibbs_rej <- function(y_current, mean, lower, upper, locs, loc_length,
-                           pre_calcs, max_iter, N_ord, N_burn_trunc) {
+                           pre_calcs, max_iter, N_burn_trunc) {
 
   ## If missing a single ordinal outcome then sample from truncated normal
   if(loc_length == 1) {

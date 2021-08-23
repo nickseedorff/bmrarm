@@ -2,7 +2,7 @@
 % Please edit documentation in R/get_preds.R
 \name{get_preds_bmrvarx}
 \alias{get_preds_bmrvarx}
-\title{Full conditional draws of the latent continuous values}
+\title{Generate iterative forecasts for bmrvarx object}
 \usage{
 get_preds_bmrvarx(
   bmrvarx_obj,
@@ -13,16 +13,18 @@ get_preds_bmrvarx(
 )
 }
 \arguments{
-\item{bmrvarx_obj}{an object returned from bmrvarx()}
+\item{bmrvarx_obj}{a bmrvarx object}
 
 \item{steps_ahead}{number of observations to forcast, done recursively}
 
 \item{X}{matrix of covariates to make forecasts with, number of rows must
-equal stes_ahead}
+equal steps_ahead}
+
+\item{get_ord_preds}{logical, discretize latent values into ordinal predictions}
 }
 \value{
-matrix
+list
 }
 \description{
-Full conditional draws of the latent continuous values
+Generate iterative forecasts for bmrvarx object
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/model_evaluation.R
 \name{get_dev}
 \alias{get_dev}
-\title{Get DIC}
+\title{Get deviance for a single set of parameter values, used to calculate DIC}
 \usage{
 get_dev(
   y,
@@ -21,17 +21,33 @@ get_dev(
 )
 }
 \arguments{
-\item{y_current}{current continous outcome values}
+\item{y}{matrix of latent and observed continuous observations}
 
-\item{mean_vec}{vector of mean values}
+\item{X}{design matrix}
 
-\item{pre_calc_mat}{a pre-calculated matrix}
+\item{z}{vector of the ordinal outcomes}
 
-\item{ord_loc}{number of ordinal outcomes}
+\item{Z_kron}{design matrix for random effects}
+
+\item{pat_idx}{vector to index patients for both outcomes}
+
+\item{beta}{matrix of beta values}
+
+\item{sig_list}{list of covariance matrix values}
+
+\item{cuts}{vector of cutpoints}
+
+\item{pat_eff}{matrix of patient effects}
+
+\item{miss_mat}{matrix to identify locations of missing values}
+
+\item{samp_info}{list of interal info used for sampling}
+
+\item{marginal}{logical, indicates of mDIC of cDIC is to be calculated}
 }
 \value{
 scalar
 }
 \description{
-Get DIC
+Get deviance for a single set of parameter values, used to calculate DIC
 }

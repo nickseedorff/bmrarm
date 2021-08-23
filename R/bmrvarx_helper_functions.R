@@ -1,10 +1,10 @@
-#' Extract conditional mean corresponsing to ordinal components
+#' Extract conditional mean corresponding to ordinal components
 #'
-#' @param y_current current continous outcome values
+#' @param y_current current continuous outcome values
 #' @param mean_vec vector of mean values
 #' @param pre_calc_mat a pre-calculated matrix
-#' @param ord_loc number of ordinal outcomes
-#' @return scalar
+#' @param ord_loc locations of the ordinal outcomes
+#' @return numeric vector
 
 cond_mean_part <- function(y_current, mean_vec, pre_calc_mat, ord_loc) {
   mean_vec[ord_loc] + pre_calc_mat %*%
@@ -12,9 +12,9 @@ cond_mean_part <- function(y_current, mean_vec, pre_calc_mat, ord_loc) {
 }
 
 
-#' Extract conditional mean corresponding to ordinal components
+#' Extract conditional means and variances for
 #'
-#' @param cov_mat covariance matrix based on first, last, or middle obs
+#' @param cov_mat covariance matrix
 #' @param samp_locs list of unique locations to be sampled
 #' @return scalar
 
@@ -40,32 +40,10 @@ pre_calc <- function(cov_mat, samp_locs) {
   lst_use
 }
 
-#' Starting values for cut points
-#'
-#' @param N_cats vector, number of categories for each ordinal variable
 
-start_cuts <- function(N_cats, fixed = 1) {
-  starts <- matrix(NA, nrow = max(N_cats) + 1, ncol = length(N_cats))
-  for(i in 1:length(N_cats)){
-    if(N_cats[i] == 2) {
-      starts[1:(N_cats[i] + 1), i] <- c(-Inf, 0, Inf)
-    } else if(fixed == 1) {
-      starts[1:(N_cats[i] + 1), i] <- c(-Inf, 0, (exp(rnorm(1, sd = 0.25))) *
-                                          (1:(N_cats[i] - 2)), Inf)
-    } else if (N_cats[i] == 3) {
-      starts[1:(N_cats[i] + 1), i] <- c(-Inf, 0, 1, Inf)
-    } else {
-      starts[1:(N_cats[i] + 1), i] <- c(-Inf, 0, 1,
-                                        (exp(rnorm(1, sd = 0.25)) + 1) *
-                                          (1:(N_cats[i] - 3)), Inf)
-    }
-  }
-  starts
-}
-
-#' Starting values for cut points
+#' Create list of sampling info to pass to functions
 #'
-#' @param N_cats vector, number of categories for each ordinal variable
+#' @param env parent environment
 
 get_sampling_info <- function(env) {
   list2env(as.list(env, all.names = T), envir = environment())
@@ -96,9 +74,9 @@ get_sampling_info <- function(env) {
        prior_sig = diag(rep(1 / sig_prior, N_covars + N_response)))
 }
 
-#' Create storage for all samples in the time series setting
+#' Create lists, vectors, and matrices for storage and passing to functions
 #'
-#' @param env parent enviroment
+#' @param env parent environment
 
 create_storage <- function(env) {
   e <- environment()

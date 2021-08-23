@@ -2,18 +2,16 @@
 % Please edit documentation in R/bmrvarx_da.R
 \name{bvar}
 \alias{bvar}
-\title{PX-DA MCMC routine to sample from BMRVAR model}
+\title{Gibbs sampler to implement a first order bvar model}
 \usage{
 bvar(
   formula,
   data,
   sig_prior = 1e+06,
-  all_draws = FALSE,
   nsim = 1000,
   burn_in = 100,
   thin = 10,
-  seed = 14,
-  verbose = TRUE
+  seed = 14
 )
 }
 \arguments{
@@ -21,29 +19,19 @@ bvar(
 
 \item{data}{a dataframe containing outcome variables, covariates, and a patient or subject identifier}
 
-\item{sig_prior}{prior variance on the regression coefficients}
-
-\item{all_draws}{logical with a default of FALSE which discards burn-in}
+\item{sig_prior}{scalar, prior variance on the regression coefficients}
 
 \item{nsim}{positive integer, number of iterations with default of 1000}
 
-\item{burn_in}{positive integer, number of iterations to remove with default of 100. Must be >= 100.}
+\item{burn_in}{positive integer, number of iterations to remove with default of 100}
 
-\item{thin}{positive integer, specifiers the period of saving samples. Default of 20 due to the high autocorrelation of the cutpoints}
+\item{thin}{positive integer, specifiers the period of saving samples. Default of 10}
 
 \item{seed}{positive integer, seed for random number generation}
-
-\item{verbose}{logical, print iteration number to keep track of progress}
-
-\item{ordinal_outcomes}{a character string containing the names of the ordinal outcomes}
-
-\item{patient_var}{name of the patient or subject identifier}
-
-\item{max_iter_rej}{maximum number of rejection algorithm attempts for multivariate truncated normal}
 }
 \value{
-mcmc
+bmrvarx
 }
 \description{
-PX-DA MCMC routine to sample from BMRVAR model
+Gibbs sampler to implement a first order bvar model
 }

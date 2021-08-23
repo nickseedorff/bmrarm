@@ -2,7 +2,7 @@
 % Please edit documentation in R/bmrarm.R
 \name{bmrarm}
 \alias{bmrarm}
-\title{MCMC sampler to implement the bmrarm model}
+\title{MCMC sampler to implement a bmrarm model}
 \usage{
 bmrarm(
   formula,
@@ -66,5 +66,5 @@ The default is 1 + number of random effects for a single person (2 or 4).}
 bmrarm
 }
 \description{
-MCMC sampler to implement the bmrarm model
+MCMC sampler to implement a bmrarm model
 }

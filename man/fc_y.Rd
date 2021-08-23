@@ -2,32 +2,26 @@
 % Please edit documentation in R/fc_bmrvarx.R
 \name{fc_y}
 \alias{fc_y}
-\title{Full conditional draws of the latent continuous values}
+\title{Function to draw latent continuous values}
 \usage{
 fc_y(y, z, mean_mat, tmp_list, miss_mat, samp_info, rej_vec)
 }
 \arguments{
-\item{y}{matrix of multivariate observations}
+\item{y}{matrix of continuous observations}
 
-\item{z}{matrix of ordinal voutcomes}
+\item{z}{matrix of ordinal outcomes}
 
-\item{miss_mat}{locations of missing values}
+\item{tmp_list}{list of current parameter values}
 
-\item{samp_info}{information for which locations to sample}
+\item{miss_mat}{matrix of location of missing values}
 
-\item{sig}{covariance matrix for the VAR process}
+\item{samp_info}{list of internal information used for sampling}
 
-\item{sig0}{for the initial values}
-
-\item{M}{transition matrix for the VAR(1) component}
-
-\item{cuts}{current threshold values}
-
-\item{num_iter}{current iteration number}
+\item{rej_vec}{vector, values track the attempts by the rejection sampler}
 }
 \value{
-matrix
+list
 }
 \description{
-Full conditional draws of the latent continuous values
+Function to draw latent continuous values
 }

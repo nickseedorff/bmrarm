@@ -2,12 +2,12 @@
 % Please edit documentation in R/bmrvarx_da.R
 \name{fc_cuts_da}
 \alias{fc_cuts_da}
-\title{Full conditional draws for the threshold parameters}
+\title{Function to draw cutpoint parameters for the DA implementation}
 \usage{
 fc_cuts_da(y, z, N_cat)
 }
 \arguments{
-\item{y}{matrix of multivariate observations}
+\item{y}{matrix of continuous observations}
 
 \item{z}{matrix of ordinal outcomes}
 
@@ -17,5 +17,5 @@ fc_cuts_da(y, z, N_cat)
 list
 }
 \description{
-Full conditional draws for the threshold parameters
+Function to draw cutpoint parameters for the DA implementation
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/fc_bmrvarx.R
 \name{fc_cuts}
 \alias{fc_cuts}
-\title{Full conditional draws for the threshold parameters}
+\title{Function to draw cutpoint parameters}
 \usage{
 fc_cuts(y, z, N_cat, upper_cut_limit)
 }
@@ -12,10 +12,12 @@ fc_cuts(y, z, N_cat, upper_cut_limit)
 \item{z}{matrix of ordinal outcomes}
 
 \item{N_cat}{vector of positive integers, number of categories for each ordinal outcome}
+
+\item{upper_cut_limit}{maximum value for the cutpoint priors (delta)}
 }
 \value{
 list
 }
 \description{
-Full conditional draws for the threshold parameters
+Function to draw cutpoint parameters
 }

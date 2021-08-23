@@ -1,24 +1,20 @@
-#' PX-DA MCMC routine to sample from BMRVAR model
+#' PX-DA MCMC routine to implement a bmrvarx model
 #'
 #' @param formula an object of class "formula"; a symbolic description of the model to be fitted
 #' @param data a dataframe containing outcome variables, covariates, and a patient or subject identifier
 #' @param ordinal_outcomes a character string containing the names of the ordinal outcomes
-#' @param patient_var name of the patient or subject identifier
-#' @param sig_prior prior variance on the regression coefficients
-#' @param all_draws logical with a default of FALSE which discards burn-in
+#' @param sig_prior scalar, prior variance on the regression coefficients
 #' @param nsim positive integer, number of iterations with default of 1000
-#' @param burn_in positive integer, number of iterations to remove with default of 100. Must be >= 100.
-#' @param thin positive integer, specifiers the period of saving samples. Default of 20 due to the high autocorrelation of the cutpoints
+#' @param burn_in positive integer, number of iterations to remove with default of 100
+#' @param thin positive integer, specifiers the period of saving samples. Default of 10
 #' @param seed positive integer, seed for random number generation
-#' @param verbose logical, print iteration number to keep track of progress
 #' @param max_iter_rej maximum number of rejection algorithm attempts for multivariate truncated normal
-#' @return mcmc
+#' @param N_burn_trunc integer, number of burn-in draws from the truncated multivariate normal Gibbs sampler
 #' @importFrom zoo na.approx
-#' @importFrom fastDummies dummy_cols
+#' @return bmrvarx
 #' @export
 
-
-bmrvarx <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
+bmrvarx <- function(formula, data, ordinal_outcomes,
                     sig_prior = 1000000, nsim = 1000, burn_in = 100, thin = 10,
                     seed = 14, max_iter_rej = 500, N_burn_trunc = 10) {
 

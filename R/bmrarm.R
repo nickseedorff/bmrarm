@@ -1,4 +1,4 @@
-#' MCMC sampler to implement the bmrarm model
+#' MCMC sampler to implement a bmrarm model
 #'
 #' @param formula an object of class "formula"; a symbolic description of the model to be fitted
 #' @param data a dataframe containing outcome variables, covariates, and a patient or subject identifier

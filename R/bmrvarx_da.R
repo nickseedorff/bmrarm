@@ -1,18 +1,22 @@
-#' PA MCMC routine to sample from BMRVAR model
+#' Gibbs DA sampler to implement a bmrvarx model
 #'
-#' @param y matrix of multivariate observations
-#' @param z vector of disease status
-#' @param df dataframe with patient and time point indexes
-#' @param nsim scalar, number of iterations with default of 1000
-#' @param burn_in scalar, number of iterations to remove with default of 50
-#' @param seed seed to default, default of 14
-#' @return mcmc
+#' @param formula an object of class "formula"; a symbolic description of the model to be fitted
+#' @param data a dataframe containing outcome variables, covariates, and a patient or subject identifier
+#' @param ordinal_outcomes a character string containing the names of the ordinal outcomes
+#' @param sig_prior scalar, prior variance on the regression coefficients
+#' @param nsim positive integer, number of iterations with default of 1000
+#' @param burn_in positive integer, number of iterations to remove with default of 100
+#' @param thin positive integer, specifiers the period of saving samples. Default of 10
+#' @param seed positive integer, seed for random number generation
+#' @param max_iter_rej maximum number of rejection algorithm attempts for multivariate truncated normal
+#' @param N_burn_trunc integer, number of burn-in draws from the truncated multivariate normal Gibbs sampler
 #' @importFrom zoo na.approx
+#' @return bmrvarx
 
 bmrvarx_da <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
-                      sig_prior = 1000000, nsim = 1000,
-                      burn_in = 100, thin = 10, seed = 14,
-                      max_iter_rej = 500) {
+                       sig_prior = 1000000, nsim = 1000, burn_in = 100,
+                       thin = 10, seed = 14, max_iter_rej = 500,
+                       N_burn_trunc = 10) {
 
   ## Extract outcome variables, record missing values
   out_vars <- setdiff(all.vars(formula),
@@ -38,7 +42,6 @@ bmrvarx_da <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
   N_covars <- ncol(covars)
   N_base_covars <- 0
   pat_idx <- rep(1, N_obs)
-  N_burn_trunc <- 0
 
   ## Get sampling info, initialize, generate storage
   samp_info <- get_sampling_info(env = environment())
@@ -105,9 +108,9 @@ bmrvarx_da <- function(formula, data, ordinal_outcomes = c("y_ord", "y_bin"),
             class = "bmrvarx")
 }
 
-#' Full conditional draws for the threshold parameters
+#' Function to draw cutpoint parameters for the DA implementation
 #'
-#' @param y matrix of multivariate observations
+#' @param y matrix of continuous observations
 #' @param z matrix of ordinal outcomes
 #' @param N_cat vector of positive integers, number of categories for each ordinal outcome
 #' @return list
@@ -133,28 +136,20 @@ fc_cuts_da <- function(y, z, N_cat) {
   cuts_list
 }
 
-#' PX-DA MCMC routine to sample from BMRVAR model
+#' Gibbs sampler to implement a first order bvar model
 #'
 #' @param formula an object of class "formula"; a symbolic description of the model to be fitted
 #' @param data a dataframe containing outcome variables, covariates, and a patient or subject identifier
-#' @param ordinal_outcomes a character string containing the names of the ordinal outcomes
-#' @param patient_var name of the patient or subject identifier
-#' @param sig_prior prior variance on the regression coefficients
-#' @param all_draws logical with a default of FALSE which discards burn-in
+#' @param sig_prior scalar, prior variance on the regression coefficients
 #' @param nsim positive integer, number of iterations with default of 1000
-#' @param burn_in positive integer, number of iterations to remove with default of 100. Must be >= 100.
-#' @param thin positive integer, specifiers the period of saving samples. Default of 20 due to the high autocorrelation of the cutpoints
+#' @param burn_in positive integer, number of iterations to remove with default of 100
+#' @param thin positive integer, specifiers the period of saving samples. Default of 10
 #' @param seed positive integer, seed for random number generation
-#' @param verbose logical, print iteration number to keep track of progress
-#' @param max_iter_rej maximum number of rejection algorithm attempts for multivariate truncated normal
-#' @return mcmc
-#' @importFrom zoo na.approx
-#' @importFrom fastDummies dummy_cols
+#' @return bmrvarx
 
 
-bvar <- function(formula, data, sig_prior = 1000000, all_draws = FALSE,
-                 nsim = 1000, burn_in = 100, thin = 10, seed = 14,
-                 verbose = TRUE) {
+bvar <- function(formula, data, sig_prior = 1000000, nsim = 1000, burn_in = 100,
+                 thin = 10, seed = 14) {
 
   ## Extract outcome variables, record missing values
   out_vars <- setdiff(all.vars(formula),
@@ -218,4 +213,37 @@ bvar <- function(formula, data, sig_prior = 1000000, all_draws = FALSE,
   structure(list(draws = draws,
                  covars_used = colnames(covars), X = covars, y = y_use),
             class = "bmrvarx")
+}
+
+#' Full conditional draws of the regression coefficients
+#'
+#' @param y matrix of multivariate observations
+#' @param X design matrix
+#' @param prior_precision prior precision matrix
+#' @return matrix
+#' @importFrom LaplacesDemon rinvwishart rmatrixnorm
+#' @import dplyr
+
+fc_sigma_theta_tilde_bvar <- function(y, X, prior_precision, y_orig, old_prior_y0) {
+  N_outcome <- ncol(y)
+  w_tmp <- y
+  X_tilde <- cbind(X, rbind(rep(0, N_outcome), y_orig[-nrow(y), ]))
+
+  if(old_prior_y0) {
+    w_tmp <- y[-1, ]
+    X_tilde <- cbind(X, rbind(rep(0, N_outcome), y_orig[-nrow(y), ]))[-1, ]
+  }
+
+  ## Find theta hat
+  x_inv <- chol2inv(chol(prior_precision + crossprod(X_tilde)))
+  theta_hat <- x_inv %*% t(X_tilde) %*% w_tmp
+
+  ## sigma_draw draw
+  val <- crossprod(w_tmp) + diag(rep(1, N_outcome)) -
+    t(w_tmp) %*% X_tilde %*% theta_hat
+  sig_draw <- rinvwishart(nrow(w_tmp) + N_outcome + 1, val)
+
+  ## effects_draw
+  theta <- rmatrixnorm(M = theta_hat, V = sig_draw, U = x_inv)
+  list(sigma_tilde = sig_draw, theta_tilde = theta)
 }

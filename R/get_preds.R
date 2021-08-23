@@ -1,14 +1,20 @@
-#' Full conditional draws of the latent continuous values
+#' Generate iterative forecasts for bmrvarx object
 #'
-#' @param bmrvarx_obj an object returned from bmrvarx()
+#' @param bmrvarx_obj a bmrvarx object
 #' @param steps_ahead number of observations to forcast, done recursively
 #' @param X matrix of covariates to make forecasts with, number of rows must
-#' equal stes_ahead
-#' @return matrix
+#' equal steps_ahead
+#' @param get_ord_preds logical, discretize latent values into ordinal predictions
 #' @importFrom MASS mvrnorm
+#' @return list
 #' @export
 
 get_preds_bmrvarx <- function(bmrvarx_obj, steps_ahead = 5, X, seed = 15, get_ord_preds = T) {
+
+  if(steps_ahead != nrow(X)) {
+    stop("nrow(X) must equal steps_ahead")
+  }
+
   set.seed(seed)
   ## Relevant data
   latent_draws <- t(as.matrix(bmrvarx_obj$data_for_forecasts[[1]][1:2, ]))
@@ -64,8 +70,9 @@ get_preds_bmrvarx <- function(bmrvarx_obj, steps_ahead = 5, X, seed = 15, get_or
        ord_preds = ord_preds[, 1:N_ord, ])
 }
 
-#' Get cuts list
-#' @param y continuous value to be discretized
+#' Discretize a latent value using cutpoints
+#' @param y scalar continuous value
+#' @param cut_points vector of cutpoints
 
 cont_to_cat <- function(y, cut_points) {
   for(i in 1:(length(cut_points) - 1)) {
@@ -75,14 +82,10 @@ cont_to_cat <- function(y, cut_points) {
   }
 }
 
-
-#' Get DIC
+#' Generate predictions for bmrarm object. Not intended for usage.
 #'
-#' @param y_current current continous outcome values
-#' @param mean_vec vector of mean values
-#' @param pre_calc_mat a pre-calculated matrix
-#' @param ord_loc number of ordinal outcomes
-#' @return scalar
+#' @param samps bmrarm object with additional structure for new time points.
+#' @return list
 
 get_preds_bmrarm <- function(samps) {
 
@@ -143,19 +146,15 @@ get_preds_bmrarm <- function(samps) {
 
       }
     }
-
-    print(x)
     list(y_last)
   })
 }
 
-#' Get DIC
+#' Generate posterior predictive draws for bmrarm object. Not intended for public use.
 #'
-#' @param y_current current continous outcome values
-#' @param mean_vec vector of mean values
-#' @param pre_calc_mat a pre-calculated matrix
-#' @param ord_loc number of ordinal outcomes
-#' @return scalar
+#' @param samps bmrarm object with additional structure for new time points
+#' @param new_X new design matrix
+#' @return list
 
 get_pred <- function(samps, new_X = NULL) {
 

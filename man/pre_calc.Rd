@@ -2,12 +2,12 @@
 % Please edit documentation in R/bmrvarx_helper_functions.R
 \name{pre_calc}
 \alias{pre_calc}
-\title{Extract conditional mean corresponding to ordinal components}
+\title{Extract conditional means and variances for}
 \usage{
 pre_calc(cov_mat, samp_locs)
 }
 \arguments{
-\item{cov_mat}{covariance matrix based on first, last, or middle obs}
+\item{cov_mat}{covariance matrix}
 
 \item{samp_locs}{list of unique locations to be sampled}
 }
@@ -15,5 +15,5 @@ pre_calc(cov_mat, samp_locs)
 scalar
 }
 \description{
-Extract conditional mean corresponding to ordinal components
+Extract conditional means and variances for
 }

@@ -2,13 +2,13 @@
 % Please edit documentation in R/bmrvarx_helper_functions.R
 \name{create_storage}
 \alias{create_storage}
-\title{Create storage for all samples in the time series setting}
+\title{Create lists, vectors, and matrices for storage and passing to functions}
 \usage{
 create_storage(env)
 }
 \arguments{
-\item{env}{parent enviroment}
+\item{env}{parent environment}
 }
 \description{
-Create storage for all samples in the time series setting
+Create lists, vectors, and matrices for storage and passing to functions
 }

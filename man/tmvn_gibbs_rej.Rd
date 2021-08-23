@@ -13,27 +13,30 @@ tmvn_gibbs_rej(
   loc_length,
   pre_calcs,
   max_iter,
-  N_ord,
   N_burn_trunc
 )
 }
 \arguments{
-\item{y_current}{continous outcome values}
+\item{y_current}{continuous outcome values}
 
 \item{mean}{mean vector of multivariate normal}
 
-\item{lower}{vector of lower thresholds}
+\item{lower}{scalar, lower truncation bound}
 
-\item{upper}{vector of upper thresholds}
+\item{upper}{scalar, upper truncation bound}
 
-\item{locs}{locations to sample}
+\item{locs}{vector of locations to sample}
 
-\item{sigma}{covariance matrix}
+\item{loc_length}{length of locs}
 
-\item{pre_cals}{pre calculations, including the conditional variance}
+\item{pre_calcs}{list of conditional means and covariance matrices}
+
+\item{max_iter}{integer, maximum number of rejection sampler attempts}
+
+\item{N_burn_trunc}{integer, number of Gibbs burn-in iterations}
 }
 \value{
-vector
+list
 }
 \description{
 Gibbs step for truncated multivariate normal

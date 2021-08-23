@@ -2,12 +2,12 @@
 % Please edit documentation in R/bmrvarx.R
 \name{bmrvarx}
 \alias{bmrvarx}
-\title{PX-DA MCMC routine to sample from BMRVAR model}
+\title{PX-DA MCMC routine to implement a bmrvarx model}
 \usage{
 bmrvarx(
   formula,
   data,
-  ordinal_outcomes = c("y_ord", "y_bin"),
+  ordinal_outcomes,
   sig_prior = 1e+06,
   nsim = 1000,
   burn_in = 100,
@@ -24,27 +24,23 @@ bmrvarx(
 
 \item{ordinal_outcomes}{a character string containing the names of the ordinal outcomes}
 
-\item{sig_prior}{prior variance on the regression coefficients}
+\item{sig_prior}{scalar, prior variance on the regression coefficients}
 
 \item{nsim}{positive integer, number of iterations with default of 1000}
 
-\item{burn_in}{positive integer, number of iterations to remove with default of 100. Must be >= 100.}
+\item{burn_in}{positive integer, number of iterations to remove with default of 100}
 
-\item{thin}{positive integer, specifiers the period of saving samples. Default of 20 due to the high autocorrelation of the cutpoints}
+\item{thin}{positive integer, specifiers the period of saving samples. Default of 10}
 
 \item{seed}{positive integer, seed for random number generation}
 
 \item{max_iter_rej}{maximum number of rejection algorithm attempts for multivariate truncated normal}
 
-\item{patient_var}{name of the patient or subject identifier}
-
-\item{all_draws}{logical with a default of FALSE which discards burn-in}
-
-\item{verbose}{logical, print iteration number to keep track of progress}
+\item{N_burn_trunc}{integer, number of burn-in draws from the truncated multivariate normal Gibbs sampler}
 }
 \value{
-mcmc
+bmrvarx
 }
 \description{
-PX-DA MCMC routine to sample from BMRVAR model
+PX-DA MCMC routine to implement a bmrvarx model
 }

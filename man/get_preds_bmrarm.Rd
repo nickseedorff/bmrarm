@@ -2,22 +2,16 @@
 % Please edit documentation in R/get_preds.R
 \name{get_preds_bmrarm}
 \alias{get_preds_bmrarm}
-\title{Get DIC}
+\title{Generate predictions for bmrarm object. Not intended for usage.}
 \usage{
 get_preds_bmrarm(samps)
 }
 \arguments{
-\item{y_current}{current continous outcome values}
-
-\item{mean_vec}{vector of mean values}
-
-\item{pre_calc_mat}{a pre-calculated matrix}
-
-\item{ord_loc}{number of ordinal outcomes}
+\item{samps}{bmrarm object with additional structure for new time points.}
 }
 \value{
-scalar
+list
 }
 \description{
-Get DIC
+Generate predictions for bmrarm object. Not intended for usage.
 }
