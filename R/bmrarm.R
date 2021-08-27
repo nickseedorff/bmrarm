@@ -27,7 +27,7 @@
 bmrarm <- function(formula, data, ordinal_outcome,
                    time_var, patient_var, random_slope = T, ar_cov = TRUE,
                    nsim = 1000, burn_in = 100, thin = 10, seed = 14,
-                   sig_prior = 1000000, sd_vec = c(0.15, 0.30, rep(0.2, 4)),
+                   sig_prior = 100000, sd_vec = c(0.15, 0.30, rep(0.2, 4)),
                    N_burn_trunc = 10, prior_siw_uni = c(0.2, 5),
                    prior_siw_df = NULL, prior_siw_scale_mat = NULL) {
 

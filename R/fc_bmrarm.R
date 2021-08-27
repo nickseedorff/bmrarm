@@ -236,8 +236,7 @@ bmrarm_fc_sig_beta <- function(y, X, Z_kron, cur_draws, samp_info) {
   }
 
   ## Get posterior draw
-  prior <- diag(rep(0.00001, N_covars))
-  x_inv <- chol2inv(chol(prior + cov_vals))
+  x_inv <- chol2inv(chol(samp_info$beta_sig_prior_prec + cov_vals))
   beta_hat <- x_inv %*% mean_vals
   val <- resid_vals + diag(rep(1, N_outcomes)) - t(mean_vals) %*% beta_hat
 
@@ -382,7 +381,6 @@ bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, Z_kron,
                                            mean = cur_draws$pat_sig_sd[i],
                                            sd = samp_info$sd_pat_sd[i])
 
-
     resid_mat_old <- y -  X %*% cur_draws$beta -
       matrix(rowSums(Z_kron * (res[samp_info$pat_idx_long, ] %*%
                                  diag(cur_draws$pat_sig_sd))),
@@ -407,8 +405,7 @@ bmrarm_fc_patient_siw <- function(y, z, X, cur_draws, samp_info, Z_kron,
                      prior_siw_uni[2], mean = cur_draws$pat_sig_sd[i],
                      sd = samp_info$sd_pat_sd[i]))
 
-    if(compar_val >= log(runif(1)) & cur_draws2$pat_sig_sd[i] >= -Inf &
-       cur_draws2$pat_sig_sd[i] <= Inf) {
+    if(compar_val >= log(runif(1))) {
       cur_draws$pat_sig_sd[i] <- cur_draws2$pat_sig_sd[i]
       accept_vec[i] <- 1
     }

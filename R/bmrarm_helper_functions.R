@@ -187,7 +187,7 @@ bmrarm_start <- function(env) {
                     pat_cont_miss_ranks = pat_cont_miss_ranks,
                     pat_z_kron = pat_z_kron, miss_mat = miss_mat,
                     pat_idx = pat_idx, N_obs = N_obs, N_pat = N_pat,
-                    beta_sig_prior = diag(rep(sig_prior, N_covars)),
+                    beta_sig_prior_prec = diag(rep(1 / sig_prior, N_covars)),
                     N_outcomes = N_outcomes, N_covars = N_covars,
                     N_pat_effects = N_pat_effects,  N_cat = N_cat,
                     sd_c = sd_vec[1], sd_ar = sd_vec[2], sd_pat_sd = sd_vec[3:6],
