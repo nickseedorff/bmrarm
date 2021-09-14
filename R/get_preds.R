@@ -111,6 +111,9 @@ get_preds_bmrarm <- function(samps) {
     cuts <- samps$draws$res_cuts[, x]
     ar_tmp <- samps$draws$res_ar[x]
 
+    mean_vec_obs <- as.numeric(X %*% beta) + rowSums(Z_kron * pat_eff[pat_idx_long, ])
+    mean_mat_obs <- matrix(mean_vec_obs, ncol = 2)
+
     mean_vec <- as.numeric(X_tmp %*% beta) + rowSums(Z_kron_for * pat_eff[pat_idx_long_for, ])
     mean_mat <- matrix(mean_vec, ncol = 2)
 
@@ -147,6 +150,63 @@ get_preds_bmrarm <- function(samps) {
     list(y_last)
   })
 }
+
+#' Generate predictions for bmrarm object. Not intended for usage.
+#'
+#' @param samps bmrarm object with additional structure for new time points.
+#' @importFrom verification rps
+#' @return list
+
+summary_preds_bmrarm <- function(preds, truth) {
+
+  N_iter <- length(preds)
+  N_preds <- dim(preds[[1]][[1]])[1] * dim(preds[[1]][[1]])[3]
+  pred_ord <- pred_cont <- matrix(NA, ncol = N_iter, nrow = N_preds)
+
+  for(i in 1:N_iter) {
+    ## Matrix of predictions
+    mat <- rbind(preds[[i]][[1]][,, 1],
+                 preds[[i]][[1]][,, 2],
+                 preds[[i]][[1]][,, 3],
+                 preds[[i]][[1]][,, 4])
+
+    ## Store preds
+    pred_ord[, i] <- mat[, 1]
+    pred_cont[, i] <- mat[, 2]
+  }
+
+  ## Prediction summaries
+  res <- as.data.frame(matrix(NA, nrow = N_preds, ncol = 10))
+  colnames(res) <- c(paste0("prob", 1:5), "mean", "lower95", "upper95",
+                     "pat", "num")
+  res$pat <- rep(1:48, 4)
+  res$num <- rep(1:4, each = 48)
+
+  ## Ordinal probabilities
+  res[, 1:5] <- apply(pred_ord, 1, function(x) {
+    c(mean(x == 1), mean(x == 2), mean(x == 3), mean(x == 4), mean(x == 5))
+  }) %>% t()
+
+  ## Posterior mean and CI for continuous outcome
+  res[, 6:8] <- apply(pred_cont, 1, function(x) {
+    c(mean(x), quantile(x, probs = c(0.025, 0.975)))
+  }) %>% t()
+
+  ## Compare to truth
+  full <- arrange(res, pat, num) %>%
+    mutate(pat_idx = truth$pat_idx, time = truth$time,
+           y_ord = truth$y_ord, y_cont = truth$y2,
+           sq_err = (y_cont - mean) ^ 2,
+           in_ci = y_cont >= lower95 & y_cont <= upper95) %>%
+    dplyr::select(-pat, -num)
+
+  ## Summary metrics
+  metrics <- c(rmse = sqrt(mean(full$sq_err)), in_ci = mean(full$in_ci),
+               rps = rps(full$y_ord, as.matrix(full[, 1:5]))$rps)
+
+  list(predictions = full, metrics = metrics)
+}
+
 
 #' Generate posterior predictive draws for bmrarm object. Not intended for public use.
 #'
