@@ -129,7 +129,7 @@ bmrarm <- function(formula, data, ordinal_outcome,
 
     ## Latent values and cut points
     y_cuts <- bmrarm_fc_y_cuts(y, z, X, Z_kron, cur_draws, samp_info)
-    y <-  res_y[,, i] <- y_cuts$y
+    y <- res_y[,, i] <- y_cuts$y
     res_cuts[, i] <- cur_draws$cuts <- y_cuts$cuts
     res_accept[i, 1] <- y_cuts$accept
 

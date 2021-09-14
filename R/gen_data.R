@@ -157,29 +157,21 @@ gen_ar_errors <- function(N = 7, N_pat = 48, seed = 10, unequal = FALSE,
     locs <- which(pat_idx == i)
     dist_mat <- as.matrix(dist(1:(length(locs) / 2), diag = T, upper = T))
     if(ar_cov) {
-    dist_mat2 <- exp(-ar_val * dist_mat)
     dist_mat2 <- ar_val ^ dist_mat
     } else {
       dist_mat2 <- diag(1, length(locs) / 2)
     }
     sig_full <- kronecker(sigma, dist_mat2)
-    num_locs <- length(locs)
     fixed_means[locs] <- kron_X[locs, ] %*% beta
     true_means[locs] <- kron_X[locs, ] %*% beta + kron_Z[locs, ] %*% subject_effects[i, ]
-    #mean_no_int[locs] <- kron_X[locs, ] %*% beta + kron_Z[locs, c(2, 4)] %*% subject_effects[i, c(2, 4)]
     err_vec[locs] <- MASS::mvrnorm(1, mu = rep(0, length(locs)), Sigma = sig_full)
     y[locs] <- true_means[locs] + err_vec[locs]
   }
-  #inv <- solve(t(kron_Z[locs, ]) %*% solve(sig_full) %*% kron_Z[locs, ])
-  #inv %*% t(kron_Z[locs, ]) %*% solve(sig_full) %*% (y[locs] - fixed_means[locs])
 
   ## Create ordinal values and binary values
   full <- data.frame(pat_idx, y, outcome = rep(c(1, 2), each = N_total)) %>%
     group_by(pat_idx, outcome) %>%
     mutate(obs_num = row_number() - 1)
-  ggplot(full, aes(y, x = obs_num, col = pat_idx, group = pat_idx)) +
-    geom_line() +
-    facet_wrap(.~outcome)
   cuts <- c(-Inf, 0, 1, 1.5, 1.9, Inf)
   full$y_ord <- case_when(
     full$y <= cuts[2] ~ 1,
@@ -188,12 +180,6 @@ gen_ar_errors <- function(N = 7, N_pat = 48, seed = 10, unequal = FALSE,
     full$y <= cuts[5]  ~ 4,
     full$y > cuts[5]  ~ 5
   )
-
-  ## Check for reasonable counts
-  table(full$y_ord)
-
-  ## Build dataframe
-  N_obs <- sum(full$outcome == 1)
 
   df <- data.frame(y1 = full$y[full$outcome == 1],
                    y_ord = full$y_ord[full$outcome == 1],
@@ -212,8 +198,103 @@ gen_ar_errors <- function(N = 7, N_pat = 48, seed = 10, unequal = FALSE,
   df$y_ord[sample(which(df$time > 2), size = 4)] <- NA
   df$y2[sample(1:nrow(df), size = 9)] <- NA
 
-  list(data = df, sigma_full = sig_full, sigma = sigma,
-       beta = beta, cuts = cuts, X = cov_mat, alpha = subject_effects,
-       sig_alpha = sig_alpha, true_means = true_means, fixed_means = fixed_means,
-       truth = truth, ar = ar_val, err_vec = err_vec)
+# Generate additional data for prediction evaluation ----------------------
+  ## Data is generated conditional on the previous data
+  ## This is because simulations were already run using the previous data
+  ## so we want to reuse those model objects and can draw new data by
+  ## conditioning on the first set
+
+
+  ## Generate new covariates
+  cov_tmp <- cov_df
+  cov_tmp$pat_idx <- pat_idx[1:(length(pat_idx) / 2)]
+  new_cov <- cov_tmp %>%
+    group_by(pat_idx) %>%
+    mutate(old_time = time, time = row_number() + max(old_time)) %>%
+    filter(row_number() <= 4)
+  pat_idx_pred <- rep(new_cov$pat_idx, 2)
+  y_pred <- rep(NA, length(pat_idx_pred))
+  new_cov <-  new_cov %>%
+    ungroup %>%
+    dplyr::select(-old_time, -pat_idx)
+
+  ## Kronecker product matrices
+  kron_X_pred <- kronecker(diag(rep(1, 2)), as.matrix(new_cov))
+  if(slope) {
+    kron_Z_pred <- kron_X_pred
+  } else {
+    kron_Z_pred <- kron_X_pred[, c(1, 3)]
+  }
+
+  for(i in 1:N_pat) {
+
+    ## Locations of old and new outcomes
+    old_locs <- which(pat_idx == i)
+    l_old_locs <- length(old_locs) / 2
+    old_cov_locs <- c(1:l_old_locs, (l_old_locs + 5):(2 * l_old_locs + 4))
+    new_locs <- which(pat_idx_pred == i)
+    dist_mat <- as.matrix(dist(1:(l_old_locs + 4), diag = T, upper = T))
+
+    ## Covariance matrix
+    if(ar_cov) {
+      dist_mat2 <- ar_val ^ dist_mat
+    } else {
+      dist_mat2 <- diag(1, nrow(dist_mat))
+    }
+
+    sig_full <- kronecker(sigma, dist_mat2)
+
+    ## Marginal mean of new data
+    marg_mean <- kron_X_pred[new_locs, ] %*% beta +
+      kron_Z_pred[new_locs, ] %*% subject_effects[i, ]
+
+    ## Conditional mean of new data
+    pre_calc <- sig_full[-old_cov_locs, old_cov_locs] %*%
+      qr.solve(sig_full[old_cov_locs, old_cov_locs])
+    cond_mean <- marg_mean + pre_calc %*% (y[old_locs] - true_means[old_locs])
+
+    ## Conditional covariance of new data
+    cond_cov <- sig_full[-old_cov_locs, -old_cov_locs] - pre_calc %*%
+      sig_full[old_cov_locs, -old_cov_locs]
+
+    ## Generate new data
+    y_pred[new_locs] <- mvrnorm(1, mu = cond_mean, Sigma = cond_cov)
+  }
+
+  ## Discretize the ordinal outcome
+  full_pred <- data.frame(pat_idx_pred, y_pred,
+                          outcome = rep(c(1, 2), each = N_pat * 4)) %>%
+    group_by(pat_idx_pred, outcome) %>%
+    mutate(obs_num = row_number() - 1)
+
+  full_pred$y_ord <- case_when(
+    full_pred$y_pred <= cuts[2] ~ 1,
+    full_pred$y_pred <= cuts[3] ~ 2,
+    full_pred$y_pred <= cuts[4] ~ 3,
+    full_pred$y_pred <= cuts[5]  ~ 4,
+    full_pred$y_pred > cuts[5]  ~ 5
+  )
+
+  ## Dataframe of data for predictions
+  df_pred <- data.frame(y1 = full_pred$y_pred[full_pred$outcome == 1],
+                        y_ord = full_pred$y_ord[full_pred$outcome == 1],
+                        y2 = full_pred$y_pred[full_pred$outcome == 2],
+                        pat_idx = full_pred$pat_idx_pred[full_pred$outcome == 1],
+                        time = new_cov$time)
+
+# Storage -----------------------------------------------------------------
+
+  ## Dataframe of observed data and data for prediction evaluation
+  full_df <- rbind(df, df_pred) %>%
+    arrange(pat_idx, time) %>%
+    as.data.frame()
+
+  full_X <- as.data.frame(cbind(1, full_df$time))
+  colnames(full_X) <- c("Constant", "time")
+
+  list(data = df, sigma = sigma, beta = beta, cuts = cuts, X = cov_mat,
+       alpha = subject_effects, sig_alpha = sig_alpha, true_means = true_means,
+       fixed_means = fixed_means, truth = truth, ar = ar_val, err_vec = err_vec,
+       pred_data = df_pred, pred_X = new_cov, full_df = full_df,
+       full_X = full_X)
 }

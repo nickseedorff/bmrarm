@@ -97,6 +97,7 @@ get_preds_bmrarm <- function(samps) {
   X <- samps$data$X
   Z_kron <- samps$data$Z_kron
   X_tmp <- as.matrix(samps$data$X_for)
+  X_which_time <- which(colnames(samps$data$X_for) == "time")
   Z_kron_for <- samps$data$Z_kron_for
   pat_idx_for <- samps$data$pat_long_for
   pat_idx_long_for <- rep(samps$data$pat_long_for, 2)
@@ -110,9 +111,6 @@ get_preds_bmrarm <- function(samps) {
     cuts <- samps$draws$res_cuts[, x]
     ar_tmp <- samps$draws$res_ar[x]
 
-    mean_vec_obs <- as.numeric(X %*% beta) + rowSums(Z_kron * pat_eff[pat_idx_long, ])
-    mean_mat_obs <- matrix(mean_vec_obs, ncol = 2)
-
     mean_vec <- as.numeric(X_tmp %*% beta) + rowSums(Z_kron_for * pat_eff[pat_idx_long_for, ])
     mean_mat <- matrix(mean_vec, ncol = 2)
 
@@ -121,7 +119,7 @@ get_preds_bmrarm <- function(samps) {
     y_last <- array(NA, c(N_pat, 2, 4))
     for(i in 1:N_pat) {
       ## Locations of vectors to sample
-      times <- X_tmp[pat_idx_for == i, 3]
+      times <- X_tmp[pat_idx_for == i, X_which_time]
       locs <- samps$data$samp_info$pat_locs[[i]]
       locs_for <- which(pat_idx_for == i)
       length_locs <- length(locs)
