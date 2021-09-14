@@ -178,9 +178,9 @@ summary_preds_bmrarm <- function(preds, truth) {
   ## Prediction summaries
   res <- as.data.frame(matrix(NA, nrow = N_preds, ncol = 10))
   colnames(res) <- c(paste0("prob", 1:5), "mean", "lower95", "upper95",
-                     "pat", "num")
+                     "pat", "num_ahead")
   res$pat <- rep(1:48, 4)
-  res$num <- rep(1:4, each = 48)
+  res$num_ahead <- rep(1:4, each = 48)
 
   ## Ordinal probabilities
   res[, 1:5] <- apply(pred_ord, 1, function(x) {
@@ -193,16 +193,19 @@ summary_preds_bmrarm <- function(preds, truth) {
   }) %>% t()
 
   ## Compare to truth
-  full <- arrange(res, pat, num) %>%
+  full <- arrange(res, pat, num_ahead) %>%
     mutate(pat_idx = truth$pat_idx, time = truth$time,
            y_ord = truth$y_ord, y_cont = truth$y2,
            sq_err = (y_cont - mean) ^ 2,
-           in_ci = y_cont >= lower95 & y_cont <= upper95) %>%
-    dplyr::select(-pat, -num)
+           in_ci = y_cont >= lower95 & y_cont <= upper95)
 
-  ## Summary metrics
-  metrics <- c(rmse = sqrt(mean(full$sq_err)), in_ci = mean(full$in_ci),
-               rps = rps(full$y_ord, as.matrix(full[, 1:5]))$rps)
+  ## Summary metrics by time pint
+
+  metrics <- sapply(1:4, function(x) {
+    tmp_full <- full[full$num_ahead == x, ]
+    c(rmse = sqrt(mean(tmp_full$sq_err)), in_ci = mean(tmp_full$in_ci),
+      rps = rps(tmp_full$y_ord, as.matrix(tmp_full[, 1:5]))$rps)
+  }) %>% t()
 
   list(predictions = full, metrics = metrics)
 }
