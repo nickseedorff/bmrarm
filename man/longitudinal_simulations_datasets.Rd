@@ -1,4 +1,3 @@
-
 #' Generated datasets for bmrarm simulations
 #'
 #' A list of datasets used in the simulated bmrarm examples.
