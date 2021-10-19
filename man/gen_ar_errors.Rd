@@ -4,14 +4,7 @@
 \alias{gen_ar_errors}
 \title{Generate data for longitudinal simulation}
 \usage{
-gen_ar_errors(
-  N = 7,
-  N_pat = 48,
-  seed = 10,
-  unequal = FALSE,
-  slope = F,
-  ar_cov = T
-)
+gen_ar_errors(N = 7, N_pat = 48, seed = 10, unequal = F, slope = F, ar_cov = T)
 }
 \arguments{
 \item{N}{Mean time points per patient, drawn from a poisson}

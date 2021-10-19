@@ -97,7 +97,7 @@ gen_single <- function(N = 610, seed = 10, N_param = 3, first_obs = 101) {
 #' @import dplyr
 #' @importFrom magic adiag
 
-gen_ar_errors <- function(N = 7, N_pat = 48, seed = 10, unequal = FALSE,
+gen_ar_errors <- function(N = 7, N_pat = 48, seed = 10, unequal = F,
                           slope = F, ar_cov = T) {
   set.seed(seed)
 
@@ -203,7 +203,6 @@ gen_ar_errors <- function(N = 7, N_pat = 48, seed = 10, unequal = FALSE,
   ## This is because simulations were already run using the previous data
   ## so we want to reuse those model objects and can draw new data by
   ## conditioning on the first set
-
 
   ## Generate new covariates
   cov_tmp <- cov_df
