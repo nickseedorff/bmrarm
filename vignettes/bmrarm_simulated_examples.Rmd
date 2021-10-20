@@ -1,0 +1,63 @@
+---
+title: "bmrarm Simulated Examples"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{bmrarm_simulated_examples}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(bmrarm)
+```
+
+# Replicate Paper Simulations (not run)
+
+The actual simulations took a non-trival amount of time and resulted in large objects. The following code can be used, along with the generated datasets that are stored in the package, to refit those exact models. 
+
+## AR Data
+
+Data is generated using the definition of bmrarm with $\rho=0.35$
+
+### Fit Models
+
+### Calculate cDIC and mDIC
+
+### Assess convergence of bmrarm
+
+### Forecast quality
+
+## Slope Data (no AR term)
+
+Data is generated using the definition of bmrarm with $\rho=0$. This can be seen as a bivariate hierachical model with subject specific slopes and intercepts.
+
+### Fit Models
+
+### Calculate cDIC and mDIC
+
+
+
+# Minimal Working Example
+
+Since the simulation studies are not actually replicated in the vignette due to time constraints, we show a minimal working example. This uses the first 5 datasets, but obtains a much smaller number of draws.
+
+## AR Data
+
+Data is generated using the definition of bmrarm with $\rho=0.35$
+
+### Fit Models
+
+### Calculate cDIC and mDIC
+
+### Assess convergence of bmrarm
+
+### Forecast quality
+
+
