@@ -22,11 +22,11 @@ bmrarm_simulations
 }
 \description{
 A list, which contains two lists of data frames that are used in the simulated bmrarm examples.
-bmrarm_simulations$ar_data_list[\link{167}] is the randomly selected dataset used to assess convergence.
+Data frame 167 from bmrarm_simulations$ar_data_list is the randomly selected dataset used to assess convergence.
 }
 \examples{
 
-\dontrun {
+\dontrun{
 # Assess convergence by fitting four separate chains
 burn <- 5000; sims <- 25000; mod_list <- list()
 

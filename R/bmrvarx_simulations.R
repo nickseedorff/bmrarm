@@ -1,6 +1,6 @@
 #' Generated datasets for bmrvarx simulations
 #'
-#' A list of data frames used in the simulated bmrvarx examples. bmrvarx_simulations[[167]] is
+#' A list of data frames used in the simulated bmrvarx examples. Data frame 167 from bmrvarx_simulations is
 #' the randomly selected dataset used to assess convergence.
 #'
 #' @format Two lists of data frames. One list contains data generated with an autoregressive term, the other without:
