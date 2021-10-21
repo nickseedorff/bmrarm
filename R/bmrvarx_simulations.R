@@ -15,7 +15,7 @@
 #' }
 #' @examples
 #'
-#' \dontrun {
+#' \dontrun{
 #' # Assess convergence by fitting four separate chains
 #' burn <- 5000; sims <- 25000; mod_list <- list()
 #'
