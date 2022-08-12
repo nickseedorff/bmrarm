@@ -224,13 +224,13 @@ bmrarm_fc_sig_beta <- function(y, X, Z_kron, cur_draws, samp_info) {
       ## Summation of residuals, mean values, and covariance values
       time_inv <- sig_list$time_inv[[time_ind]]
       resid_vals <- resid_vals +
-        crossprod(resid_mat[locs, ], time_inv) %*% resid_mat[locs, ]
-      mean_vals <- mean_vals + crossprod(X_pat, time_inv) %*% resid_mat[locs, ]
+        crossprod(resid_mat[locs,, drop = FALSE], time_inv) %*% resid_mat[locs,, drop = FALSE]
+      mean_vals <- mean_vals + crossprod(X_pat, time_inv) %*% resid_mat[locs,, drop = FALSE]
       cov_vals <- cov_vals + crossprod(X_pat, time_inv) %*% X_pat
     } else {
       ## Summation of residuals, mean values, and covariance values
-      resid_vals <- resid_vals + crossprod(resid_mat[locs, ], resid_mat[locs, ])
-      mean_vals <- mean_vals + crossprod(X_pat, resid_mat[locs, ])
+      resid_vals <- resid_vals + crossprod(resid_mat[locs,, drop = FALSE], resid_mat[locs,, drop = FALSE])
+      mean_vals <- mean_vals + crossprod(X_pat, resid_mat[locs,, drop = FALSE])
       cov_vals <- cov_vals + crossprod(X_pat, X_pat)
     }
   }
@@ -298,7 +298,7 @@ dmatrix_normal_log <- function(resid_mat, cur_draws, samp_info, sig_list) {
   sig_inv <- chol2inv(chol(cur_draws$sigma))
   for(i in 1:N_pat) {
     ## Get patient locations and differences
-    pat_resid <- resid_mat[samp_info$pat_locs[[i]], ]
+    pat_resid <- resid_mat[samp_info$pat_locs[[i]],, drop = FALSE]
     time_ind <- samp_info$pat_time_ind[i]
     time_inv <- sig_list$time_inv[[time_ind]]
     time_det <- sig_list$time_det[[time_ind]]

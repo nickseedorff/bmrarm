@@ -7,7 +7,7 @@
 #' \describe{
 #'   \item{ar_data_list}{list of 400 dataframes generated using bmrarm with \eqn{rho = 0.35}}
 #'   \item{slope_data_list}{list of 400 dataframes generated using bmrarm with \eqn{rho = 0}}
-#'   \item{y1}{true continuous values for the ordinal outcome, unused for modeled}
+#'   \item{y1}{true continuous values for the ordinal outcome, unused for modeling}
 #'   \item{y_ord}{ordinal outcome, obtained from discretizing y1}
 #'   \item{y2}{observed continuous outcome}
 #'   \item{pat_idx}{patient identifier, integer}

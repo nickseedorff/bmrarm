@@ -28,6 +28,17 @@ test_that("bmrarm works as anticipated", {
     time_var = "time", ar_cov = T, burn_in = 250, nsim = 500, thin = 1,
     seed = 3, sd_vec = c(0.15, 0.30, rep(0.2, 4)))
 
+# Test brmarm model against stored object ---------------------------------
+  sim_data_single_obs <- rbind(sim_data$data, c(0.5, 4, 0.75, 49, 0))
+  samps_ar_single <- bmrarm(
+    formula = cbind(y_ord, y2) ~ time, data = sim_data_single_obs,
+    ordinal_outcome = "y_ord", patient_var = "pat_idx", random_slope = T,
+    time_var = "time", ar_cov = T, burn_in = 5, nsim = 10, thin = 1,
+    seed = 3, sd_vec = c(0.15, 0.30, rep(0.2, 4)))
+
+  expect_equal(c(1.846025, 3.399137),
+               rowMeans(samps_ar_single$draws$res_cuts)[4:5], 4)
+
 # Store results for later use or updating ---------------------------------
 
    # saveRDS(sim_data, ".\\Test_objects/bmrarm_data_object.RDS")

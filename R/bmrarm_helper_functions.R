@@ -143,8 +143,8 @@ bmrarm_start <- function(env) {
       N_obs
     pat_cont_miss_ranks[[i]] <-
       rank(pat_all_locs[[i]])[pat_all_locs[[i]] %in% pat_cont_miss_locs[[i]]]
-    pat_z_kron[[i]] <- kronecker(diag(rep(1, N_outcomes)), Z[pat_locs[[i]], ])
-    pat_X[[i]] <- X[pat_locs[[i]], ]
+    pat_z_kron[[i]] <- kronecker(diag(rep(1, N_outcomes)), Z[pat_locs[[i]],, drop = FALSE])
+    pat_X[[i]] <- X[pat_locs[[i]],, drop = FALSE]
     pat_times[[i]] <- time_vec[pat_locs[[i]]]
 
     # Unique combinations of outcomes -----------------------------------------

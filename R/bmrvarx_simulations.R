@@ -6,12 +6,16 @@
 #' @format Two lists of data frames. One list contains data generated with an autoregressive term, the other without:
 #' \describe{
 #'   \item{obs_num}{Time since baseline}
-#'   \item{y1}{true continuous values for the ordinal outcome, unused for modeled}
-#'   \item{y_ord}{ordinal outcome, obtained from discretizing y1}
-#'   \item{y2}{observed continuous outcome}
-#'   \item{pat_idx}{patient identifier, integer}
-#'   \item{time}{time since baseline, integer}
-#'   \item{data_type}{identifies if data was used for training or testing. Only applicable to ar_data_list data frames as all data was training data for the slope_data_list data frames.}
+#'   \item{y1}{true continuous values for the first ordinal outcome}
+#'   \item{y2}{true continuous values for the second ordinal outcome}
+#'   \item{y3}{observed continuous outcome}
+#'   \item{y_ord}{first ordinal outcome. Obtained by discretizing y1}
+#'   \item{y_ord2}{first ordinal outcome. Obtained by discretizing y2}
+#'   \item{x1}{continous covariate, randomly generated from a standard normal}
+#'   \item{y3_miss}{y3 with 5 percent of values set to missing}
+#'   \item{y_ord_miss}{y_ord_miss with 5 percent of values set to missing}
+#'   \item{y_ord2_miss}{y_ord2_miss with 5 percent of values set to missing}
+#'   \item{data_type}{identifies if data was used for training or testing. The last ten observations we used to evaluate forecast accuracy.}
 #' }
 #' @examples
 #'
