@@ -18,4 +18,16 @@ Suggests:
     rmarkdown
 VignetteBuilder: knitr
 Depends: 
-    R (>= 3.6)
+    R (>= 3.6),
+    ggplot2,
+    dplyr,
+    tmvtnorm,
+    LaplacesDemon,
+    MASS,
+    OpenMx,
+    coda,
+    magic,
+    mvtnorm,
+    truncnorm,
+    verification,
+    zoo
